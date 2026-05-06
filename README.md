@@ -12,6 +12,8 @@
 
 ## 初次运行（Windows + Conda）
 
+按下面顺序执行即可（干净环境推荐流程）：
+
 ### 1. 创建并激活 Conda 环境
 ```bash
 conda create -n gene-tree python=3.11 -y
@@ -20,32 +22,47 @@ pip install -r requirementlist.txt
 ```
 
 ### 2. 准备 `.env`
-项目已提供 `.env.example`，复制一份为 `.env`：
-
 ```bash
 copy .env.example .env
 ```
 
-默认本地数据库配置为：
-- `GENE_TREE_DB_HOST=127.0.0.1`
-- `GENE_TREE_DB_PORT=3306`
+默认本地数据库配置：
+- `GENE_TREE_DB_NAME=gene_tree`
 - `GENE_TREE_DB_USER=root`
 - `GENE_TREE_DB_PASSWORD=`（空密码）
-- `GENE_TREE_DB_NAME=gene_tree`
+- `GENE_TREE_DB_HOST=127.0.0.1`
+- `GENE_TREE_DB_PORT=3306`
 
-### 3. 在 MySQL 中创建数据库
+### 3. 创建数据库
 ```sql
 CREATE DATABASE gene_tree CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 4. 初始化表结构并启动
+### 4. 执行 Django 迁移（创建表结构）
 ```bash
-python manage.py makemigrations
 python manage.py migrate
+```
+
+### 5. 导入测试数据
+```bash
+mysql -u root -p gene_tree < sql/init.sql
+```
+
+PowerShell 也可用：
+```powershell
+Get-Content .\sql\init.sql | mysql -u root -p gene_tree
+```
+
+### 6. 启动项目
+```bash
 python manage.py runserver
 ```
 
 访问：`http://127.0.0.1:8000/`
+
+### 7. 默认测试账号（初始化后可用）
+- 管理员：`demo_admin / Admin@12345`（owner）
+- 编辑者：`demo_editor / Editor@12345`（editor）
 
 ---
 
