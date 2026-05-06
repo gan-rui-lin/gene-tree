@@ -1,0 +1,36 @@
+project/
+├── app/
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── services.py
+│   ├── urls.py
+│   └── views.py
+├── project/
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── sql/
+│   ├── core_queries.sql
+│   └── schema.sql
+├── static/
+│   └── css/
+│       └── site.css
+├── templates/
+│   ├── base.html
+│   ├── login.html
+│   ├── members.html
+│   └── tree.html
+├── api_spec.txt
+├── environment.yml
+├── frontend_spec.txt
+├── manage.py
+├── project_structure.txt
+├── README.txt
+├── requirementlist.txt
+└── setup_conda_env.bat

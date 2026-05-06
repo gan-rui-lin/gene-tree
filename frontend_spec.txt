@@ -1,0 +1,33 @@
+Frontend design (Django Template + Bootstrap)
+
+1) Login page: /login-page
+- Input fields:
+  - username
+  - password
+- Display fields:
+  - login error message
+- Interactions:
+  - submit form
+  - on success redirect to /members-page
+
+2) Member management page: /members-page
+- Input fields:
+  - genealogy selector
+  - name prefix search
+  - create member form (name, gender, birth_year, death_year, biography)
+- Display fields:
+  - member list table
+  - selected genealogy title/surname
+- Interactions:
+  - fuzzy search with prefix (LIKE 'xxx%')
+  - create member
+  - switch genealogy view
+
+3) Tree display page: /tree-page
+- Input fields:
+  - member selector
+- Display fields:
+  - descendant tree rendered as nested nodes
+- Interactions:
+  - select root member
+  - render descendants tree dynamically by JSON data
