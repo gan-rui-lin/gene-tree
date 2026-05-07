@@ -1,0 +1,120 @@
+API Design (RESTful)
+
+1) POST /register
+Parameters(JSON):
+{
+  "username": "zhangsan",
+  "password": "P@ssw0rd",
+  "email": "zhangsan@example.com"
+}
+Response:
+{
+  "message": "register_success",
+  "user": {"user_id": 1, "username": "zhangsan"}
+}
+
+2) POST /login
+Parameters(JSON):
+{
+  "username": "zhangsan",
+  "password": "P@ssw0rd"
+}
+Response:
+{
+  "message": "login_success",
+  "user": {"user_id": 1, "username": "zhangsan"}
+}
+
+3) GET /members?genealogy_id=1&name=张
+Query:
+- genealogy_id: required when selecting specific genealogy
+- name: optional prefix for LIKE 'xxx%'
+Response:
+{
+  "items": [
+    {
+      "member_id": 1001,
+      "genealogy_id": 1,
+      "name": "张三",
+      "gender": "M",
+      "birth_year": 1980,
+      "death_year": null,
+      "biography": "..."
+    }
+  ]
+}
+
+4) POST /members
+Parameters(JSON):
+{
+  "genealogy_id": 1,
+  "name": "李四",
+  "gender": "F",
+  "birth_year": 1985,
+  "death_year": null,
+  "biography": "..."
+}
+Response:
+{
+  "message": "create_success",
+  "member": {
+    "member_id": 1002,
+    "genealogy_id": 1,
+    "name": "李四",
+    "gender": "F"
+  }
+}
+
+5) GET /ancestors/{id}
+Example: /ancestors/1002
+Response:
+{
+  "items": [
+    {"member_id": 11, "name": "张父", "depth": 1},
+    {"member_id": 2, "name": "张祖父", "depth": 2}
+  ]
+}
+
+6) GET /descendants/{id}
+Example: /descendants/11
+Response:
+{
+  "items": [
+    {"member_id": 1002, "name": "李四", "depth": 1},
+    {"member_id": 1200, "name": "李四之子", "depth": 2}
+  ]
+}
+
+7) GET /relationship?id1=1002&id2=1200
+Response:
+{
+  "items": [
+    {"member_id": 1002, "name": "李四", "via": null},
+    {"member_id": 1200, "name": "李四之子", "via": "child"}
+  ]
+}
+
+Additional APIs for genealogy collaboration:
+- GET/POST /genealogies
+- POST /genealogies/{id}/invite
+- GET/PUT/DELETE /members/{id}
+- GET /tree/{id}
+
+8) GET /genealogies
+Response:
+{
+  "items": [
+    {
+      "genealogy_id": 1,
+      "title": "张氏示例族谱",
+      "surname": "张",
+      "created_at": "2026-05-07T12:30:00Z",
+      "role": "owner"
+    }
+  ]
+}
+
+9) Permission notes
+- owner/editor can create/update/delete members
+- viewer is read-only for members and tree/query endpoints
+- owner is required to invite collaborators

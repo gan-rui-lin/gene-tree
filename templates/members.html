@@ -4,9 +4,33 @@
     <h3 class="mb-0">成员管理</h3>
 </div>
 
+{% if status_message %}
+    <div class="alert alert-success">{{ status_message }}</div>
+{% endif %}
 {% if error %}
     <div class="alert alert-warning">{{ error }}</div>
-{% else %}
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">创建族谱</h5>
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_genealogy">
+            <div class="col-md-4">
+                <input name="title" class="form-control" placeholder="族谱标题" required>
+            </div>
+            <div class="col-md-3">
+                <input name="surname" class="form-control" placeholder="姓氏" required>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" type="submit">创建</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if genealogies %}
     <form class="row g-2 mb-3" method="get">
         <div class="col-md-3">
             <label class="form-label">族谱</label>
@@ -25,13 +49,45 @@
         <div class="col-md-2 d-flex align-items-end">
             <button class="btn btn-outline-primary w-100">查询</button>
         </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <span class="badge text-bg-secondary">当前角色：{{ selected_role|default:"-" }}</span>
+        </div>
     </form>
 
+    {% if can_invite_selected %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">邀请协作者</h5>
+            <form method="post" class="row g-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="invite_user">
+                <input type="hidden" name="genealogy_id" value="{{ selected_genealogy_id }}">
+                <div class="col-md-4">
+                    <input name="username" class="form-control" placeholder="被邀请用户名" required>
+                </div>
+                <div class="col-md-3">
+                    <select name="role" class="form-select">
+                        <option value="editor">editor</option>
+                        <option value="viewer">viewer</option>
+                        <option value="owner">owner</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-primary w-100" type="submit">邀请</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if can_write_selected %}
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">新增成员</h5>
             <form method="post" class="row g-2">
                 {% csrf_token %}
+                <input type="hidden" name="action" value="create_member">
+                <input type="hidden" name="genealogy_id" value="{{ selected_genealogy_id }}">
                 <div class="col-md-3">
                     <input name="name" class="form-control" placeholder="姓名" required>
                 </div>
@@ -56,6 +112,9 @@
             </form>
         </div>
     </div>
+    {% else %}
+    <div class="alert alert-info">当前角色为只读，不能新增、修改或删除成员。</div>
+    {% endif %}
 
     <div class="table-responsive">
         <table class="table table-striped table-bordered align-middle">
@@ -67,10 +126,76 @@
                 <th>出生年</th>
                 <th>去世年</th>
                 <th>简介</th>
+                <th>操作</th>
             </tr>
             </thead>
             <tbody>
             {% for m in members %}
+                {% if can_write_selected %}
+                <tr>
+                    <td>{{ m.member_id }}</td>
+                    <td>
+                        <input
+                            name="name"
+                            class="form-control form-control-sm"
+                            value="{{ m.name }}"
+                            form="update-form-{{ m.member_id }}"
+                            required
+                        >
+                    </td>
+                    <td>
+                        <select
+                            name="gender"
+                            class="form-select form-select-sm"
+                            form="update-form-{{ m.member_id }}"
+                            required
+                        >
+                            <option value="M" {% if m.gender == "M" %}selected{% endif %}>男</option>
+                            <option value="F" {% if m.gender == "F" %}selected{% endif %}>女</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input
+                            name="birth_year"
+                            class="form-control form-control-sm"
+                            value="{{ m.birth_year|default_if_none:'' }}"
+                            form="update-form-{{ m.member_id }}"
+                        >
+                    </td>
+                    <td>
+                        <input
+                            name="death_year"
+                            class="form-control form-control-sm"
+                            value="{{ m.death_year|default_if_none:'' }}"
+                            form="update-form-{{ m.member_id }}"
+                        >
+                    </td>
+                    <td>
+                        <input
+                            name="biography"
+                            class="form-control form-control-sm"
+                            value="{{ m.biography }}"
+                            form="update-form-{{ m.member_id }}"
+                        >
+                    </td>
+                    <td class="text-nowrap">
+                        <form method="post" class="d-inline" id="update-form-{{ m.member_id }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_member">
+                            <input type="hidden" name="genealogy_id" value="{{ selected_genealogy_id }}">
+                            <input type="hidden" name="member_id" value="{{ m.member_id }}">
+                            <button class="btn btn-sm btn-outline-success" type="submit">更新</button>
+                        </form>
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_member">
+                            <input type="hidden" name="genealogy_id" value="{{ selected_genealogy_id }}">
+                            <input type="hidden" name="member_id" value="{{ m.member_id }}">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
                 <tr>
                     <td>{{ m.member_id }}</td>
                     <td>{{ m.name }}</td>
@@ -78,12 +203,16 @@
                     <td>{{ m.birth_year|default_if_none:"" }}</td>
                     <td>{{ m.death_year|default_if_none:"" }}</td>
                     <td>{{ m.biography }}</td>
+                    <td>只读</td>
                 </tr>
+                {% endif %}
             {% empty %}
-                <tr><td colspan="6" class="text-center">暂无数据</td></tr>
+                <tr><td colspan="7" class="text-center">暂无数据</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
+{% else %}
+    <div class="alert alert-warning">当前用户还没有可访问的族谱。请先创建族谱。</div>
 {% endif %}
 {% endblock %}

@@ -1,50 +1,49 @@
--- 1) Ancestors query (recursive CTE)
--- Input: :member_id
+-- 1) 祖先查询（递归 CTE）
+-- 输入参数：:id
 WITH RECURSIVE ancestors AS (
-    SELECT parent_id, child_id, relation_type, 1 AS depth
+    SELECT parent_id, child_id
     FROM parent_child
-    WHERE child_id = :member_id
+    WHERE child_id = :id
+
     UNION ALL
-    SELECT pc.parent_id, pc.child_id, pc.relation_type, a.depth + 1
+
+    SELECT pc.parent_id, pc.child_id
     FROM parent_child pc
     JOIN ancestors a ON pc.child_id = a.parent_id
 )
-SELECT a.parent_id AS ancestor_id, m.name, a.depth
-FROM ancestors a
-JOIN member m ON m.member_id = a.parent_id
-ORDER BY a.depth, ancestor_id;
+SELECT *
+FROM ancestors;
 
--- 2) Descendants query (recursive CTE)
--- Input: :member_id
+-- 2) 后代查询（递归 CTE）
+-- 输入参数：:id
 WITH RECURSIVE descendants AS (
-    SELECT parent_id, child_id, relation_type, 1 AS depth
+    SELECT child_id
     FROM parent_child
-    WHERE parent_id = :member_id
+    WHERE parent_id = :id
+
     UNION ALL
-    SELECT pc.parent_id, pc.child_id, pc.relation_type, d.depth + 1
+
+    SELECT pc.child_id
     FROM parent_child pc
     JOIN descendants d ON pc.parent_id = d.child_id
 )
-SELECT d.child_id AS descendant_id, m.name, d.depth
-FROM descendants d
-JOIN member m ON m.member_id = d.child_id
-ORDER BY d.depth, descendant_id;
+SELECT *
+FROM descendants;
 
--- 3) Spouse query
--- Input: :member_id
-SELECT spouse2_id AS spouse_id
+-- 3) 配偶查询
+-- 输入参数：:id
+SELECT spouse2_id
 FROM marriage
-WHERE spouse1_id = :member_id
+WHERE spouse1_id = :id
+
 UNION
-SELECT spouse1_id AS spouse_id
-FROM marriage
-WHERE spouse2_id = :member_id;
 
--- 4) Relationship shortest path (SQL + BFS idea)
--- SQL step A: build undirected edge set from parent-child + marriage
--- SQL step B: fetch neighbors for BFS iteration
---
--- Step A (edge set):
+SELECT spouse1_id
+FROM marriage
+WHERE spouse2_id = :id;
+
+-- 4) 亲缘路径查询（SQL + BFS 思路）
+-- Step A: 构建无向边集合（父子关系 + 婚姻关系）
 SELECT parent_id AS node_a, child_id AS node_b, 'parent_child' AS edge_type FROM parent_child
 UNION ALL
 SELECT child_id AS node_a, parent_id AS node_b, 'parent_child' AS edge_type FROM parent_child
@@ -52,6 +51,6 @@ UNION ALL
 SELECT spouse1_id AS node_a, spouse2_id AS node_b, 'marriage' AS edge_type FROM marriage
 UNION ALL
 SELECT spouse2_id AS node_a, spouse1_id AS node_b, 'marriage' AS edge_type FROM marriage;
---
--- Step B (BFS each layer):
+
+-- Step B: 在应用层按层执行 BFS
 -- SELECT node_b FROM edge_set WHERE node_a IN (:current_frontier) AND node_b NOT IN (:visited);

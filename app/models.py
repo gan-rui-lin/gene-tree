@@ -79,7 +79,7 @@ class ParentChild(models.Model):
         (RELATION_MOTHER, "Mother"),
     ]
 
-    parent_child_id = models.BigAutoField(primary_key=True)
+    pk = models.CompositePrimaryKey("parent_id", "child_id")
     parent = models.ForeignKey(
         Member, on_delete=models.CASCADE, related_name="children_links"
     )
@@ -91,7 +91,6 @@ class ParentChild(models.Model):
     class Meta:
         db_table = "parent_child"
         constraints = [
-            models.UniqueConstraint(fields=["parent", "child"], name="uq_parent_child"),
             models.CheckConstraint(
                 check=~Q(parent=models.F("child")), name="chk_parent_not_self"
             ),

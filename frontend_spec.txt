@@ -12,15 +12,23 @@ Frontend design (Django Template + Bootstrap)
 
 2) Member management page: /members-page
 - Input fields:
+  - genealogy create form (title, surname)
   - genealogy selector
+  - collaborator invite form (username, role; owner only)
   - name prefix search
   - create member form (name, gender, birth_year, death_year, biography)
+  - inline edit form for each member (name, gender, birth_year, death_year, biography)
+  - delete member action
 - Display fields:
   - member list table
-  - selected genealogy title/surname
+  - selected genealogy title/surname + current role
 - Interactions:
+  - create genealogy
+  - invite collaborator (owner only)
   - fuzzy search with prefix (LIKE 'xxx%')
   - create member
+  - update member
+  - delete member
   - switch genealogy view
 
 3) Tree display page: /tree-page

@@ -3,10 +3,11 @@
 这是一个基于 Django 的族谱管理系统，支持：
 - 用户注册 / 登录
 - 族谱创建与协作邀请
-- 成员 CRUD 与姓名前缀模糊查询（`LIKE 'xxx%'`）
+- 成员 CRUD（含页面内联更新/删除）与姓名前缀模糊查询（`LIKE 'xxx%'`）
 - 祖先 / 后代递归查询
 - 亲缘关系最短路径查询
 - 树形后代展示
+- 角色权限控制（owner/editor 可写，viewer 只读）
 
 ---
 
@@ -42,6 +43,9 @@ CREATE DATABASE gene_tree CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```bash
 python manage.py migrate
 ```
+
+> 注意：`parent_child` 已按报告改为复合主键 `(parent_id, child_id)`。
+> 如果你之前已经按旧版本迁移过数据库（含 `parent_child_id`），建议重建数据库后重新 `migrate`，避免主键结构不一致。
 
 ### 5. 导入测试数据
 ```bash

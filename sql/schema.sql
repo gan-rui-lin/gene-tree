@@ -66,18 +66,16 @@ CREATE TABLE IF NOT EXISTS `member` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `parent_child` (
-    `parent_child_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `parent_id` BIGINT NOT NULL,
     `child_id` BIGINT NOT NULL,
     `relation_type` VARCHAR(10) NOT NULL,
+    PRIMARY KEY (`parent_id`, `child_id`),
     CONSTRAINT `fk_parent_child_parent`
         FOREIGN KEY (`parent_id`) REFERENCES `member`(`member_id`)
         ON DELETE CASCADE,
     CONSTRAINT `fk_parent_child_child`
         FOREIGN KEY (`child_id`) REFERENCES `member`(`member_id`)
         ON DELETE CASCADE,
-    CONSTRAINT `uq_parent_child`
-        UNIQUE (`parent_id`, `child_id`),
     CONSTRAINT `chk_relation_type`
         CHECK (`relation_type` IN ('father', 'mother')),
     CONSTRAINT `chk_parent_not_self`

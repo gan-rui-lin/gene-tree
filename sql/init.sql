@@ -88,17 +88,16 @@ ON DUPLICATE KEY UPDATE
     `biography` = VALUES(`biography`);
 
 INSERT INTO `parent_child` (
-    `parent_child_id`,
     `parent_id`,
     `child_id`,
     `relation_type`
 ) VALUES
-    (1, 1001, 1003, 'father'),
-    (2, 1002, 1003, 'mother'),
-    (3, 1003, 1005, 'father'),
-    (4, 1004, 1005, 'mother'),
-    (5, 1003, 1006, 'father'),
-    (6, 1004, 1006, 'mother')
+    (1001, 1003, 'father'),
+    (1002, 1003, 'mother'),
+    (1003, 1005, 'father'),
+    (1004, 1005, 'mother'),
+    (1003, 1006, 'father'),
+    (1004, 1006, 'mother')
 ON DUPLICATE KEY UPDATE
     `relation_type` = VALUES(`relation_type`);
 

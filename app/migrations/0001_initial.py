@@ -86,7 +86,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ParentChild',
             fields=[
-                ('parent_child_id', models.BigAutoField(primary_key=True, serialize=False)),
+                ('pk', models.CompositePrimaryKey('parent_id', 'child_id', blank=True, editable=False, primary_key=True, serialize=False)),
                 ('relation_type', models.CharField(choices=[('father', 'Father'), ('mother', 'Mother')], max_length=10)),
                 ('child', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='parent_links', to='app.member')),
                 ('parent', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='children_links', to='app.member')),
@@ -127,10 +127,6 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name='parentchild',
             index=models.Index(fields=['parent', 'child'], name='idx_parent_child'),
-        ),
-        migrations.AddConstraint(
-            model_name='parentchild',
-            constraint=models.UniqueConstraint(fields=('parent', 'child'), name='uq_parent_child'),
         ),
         migrations.AddConstraint(
             model_name='parentchild',
