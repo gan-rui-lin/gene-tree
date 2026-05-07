@@ -1,6 +1,16 @@
 Frontend design (Django Template + Bootstrap)
 
-1) Login page: /login-page
+1) Dashboard page: /dashboard-page
+- Input fields:
+  - genealogy selector
+- Display fields:
+  - total members
+  - male count + ratio
+  - female count + ratio
+- Interactions:
+  - switch genealogy and refresh statistics
+
+2) Login page: /login-page
 - Input fields:
   - username
   - password
@@ -10,7 +20,7 @@ Frontend design (Django Template + Bootstrap)
   - submit form
   - on success redirect to /members-page
 
-2) Member management page: /members-page
+3) Member management page: /members-page
 - Input fields:
   - genealogy create form (title, surname)
   - genealogy selector
@@ -31,7 +41,7 @@ Frontend design (Django Template + Bootstrap)
   - delete member
   - switch genealogy view
 
-3) Tree display page: /tree-page
+4) Tree display page: /tree-page
 - Input fields:
   - member selector
 - Display fields:

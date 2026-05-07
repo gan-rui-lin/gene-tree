@@ -103,3 +103,4 @@ CREATE INDEX idx_parent ON parent_child(parent_id);
 CREATE INDEX idx_child ON parent_child(child_id);
 CREATE INDEX idx_parent_child ON parent_child(parent_id, child_id);
 CREATE INDEX idx_member_name ON member(name);
+CREATE INDEX idx_member_name_prefix ON member(name(10));

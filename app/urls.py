@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path("", views.login_page_view, name="root"),
     path("login-page", views.login_page_view, name="login-page"),
+    path("dashboard-page", views.dashboard_page_view, name="dashboard-page"),
     path("members-page", views.members_page_view, name="members-page"),
     path("tree-page", views.tree_page_view, name="tree-page"),
     path("register", views.register_view, name="register"),
@@ -21,4 +22,5 @@ urlpatterns = [
     path("descendants/<int:member_id>", views.descendants_view, name="descendants"),
     path("relationship", views.relationship_view, name="relationship"),
     path("tree/<int:member_id>", views.tree_data_view, name="tree-data"),
+    path("dashboard", views.dashboard_view, name="dashboard"),
 ]

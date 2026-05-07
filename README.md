@@ -82,6 +82,7 @@ python manage.py runserver
 ---
 
 ## 主要页面
+- `/dashboard-page`
 - `/login-page`
 - `/members-page`
 - `/tree-page`
@@ -89,7 +90,12 @@ python manage.py runserver
 ## 主要 API
 - `POST /register`
 - `POST /login`
+- `GET /dashboard`
 - `GET/POST /members`
 - `GET /ancestors/{id}`
 - `GET /descendants/{id}`
 - `GET /relationship?id1=xxx&id2=xxx`
+
+## 补充脚本与SQL
+- 数据生成脚本：`scripts/generate_family_csv.py`
+- 导入导出示例：`sql/import_export.sql`

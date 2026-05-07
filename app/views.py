@@ -60,6 +60,21 @@ def _is_member_accessible(user, member):
     ).exists()
 
 
+def _build_dashboard_stats(genealogy_id):
+    total = Member.objects.filter(genealogy_id=genealogy_id).count()
+    male = Member.objects.filter(genealogy_id=genealogy_id, gender="M").count()
+    female = Member.objects.filter(genealogy_id=genealogy_id, gender="F").count()
+    male_ratio = round((male / total) * 100, 2) if total else 0.0
+    female_ratio = round((female / total) * 100, 2) if total else 0.0
+    return {
+        "total_members": total,
+        "male_members": male,
+        "female_members": female,
+        "male_ratio": male_ratio,
+        "female_ratio": female_ratio,
+    }
+
+
 def api_login_required(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):
@@ -397,6 +412,34 @@ def tree_data_view(request, member_id):
     return JsonResponse(tree)
 
 
+@api_login_required
+@require_http_methods(["GET"])
+def dashboard_view(request):
+    accessible_ids = _accessible_genealogy_ids(request.user)
+    if not accessible_ids:
+        return JsonResponse({"error": "no_accessible_genealogy"}, status=403)
+
+    genealogy_id = _to_int(request.GET.get("genealogy_id"))
+    if genealogy_id is None:
+        genealogy_id = accessible_ids[0]
+    if genealogy_id not in accessible_ids:
+        return JsonResponse({"error": "permission_denied"}, status=403)
+
+    genealogy = Genealogy.objects.filter(genealogy_id=genealogy_id).first()
+    if not genealogy:
+        return JsonResponse({"error": "genealogy_not_found"}, status=404)
+
+    data = _build_dashboard_stats(genealogy_id)
+    return JsonResponse(
+        {
+            "genealogy_id": genealogy.genealogy_id,
+            "title": genealogy.title,
+            "surname": genealogy.surname,
+            **data,
+        }
+    )
+
+
 @require_http_methods(["GET", "POST"])
 def login_page_view(request):
     if request.method == "POST":
@@ -600,5 +643,35 @@ def tree_page_view(request):
             "members": members,
             "selected_member_id": selected_member_id,
             "tree_json": json.dumps(tree, ensure_ascii=False),
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET"])
+def dashboard_page_view(request):
+    links = GenealogyUser.objects.filter(user=request.user).select_related("genealogy")
+    genealogies = [link.genealogy for link in links]
+    if not genealogies:
+        return render(request, "dashboard.html", {"error": "当前用户还没有可访问的族谱"})
+
+    accessible_ids = [g.genealogy_id for g in genealogies]
+    selected_genealogy_id = _to_int(request.GET.get("genealogy_id")) or accessible_ids[0]
+    if selected_genealogy_id not in accessible_ids:
+        return HttpResponseForbidden("无权限访问该族谱")
+
+    selected_genealogy = next(
+        (g for g in genealogies if g.genealogy_id == selected_genealogy_id), None
+    )
+    stats = _build_dashboard_stats(selected_genealogy_id)
+
+    return render(
+        request,
+        "dashboard.html",
+        {
+            "genealogies": genealogies,
+            "selected_genealogy_id": selected_genealogy_id,
+            "selected_genealogy": selected_genealogy,
+            "stats": stats,
         },
     )

@@ -112,6 +112,10 @@ class Migration(migrations.Migration):
             model_name='member',
             index=models.Index(fields=['name'], name='idx_member_name'),
         ),
+        migrations.RunSQL(
+            sql="CREATE INDEX idx_member_name_prefix ON member(name(10));",
+            reverse_sql="DROP INDEX idx_member_name_prefix ON member;",
+        ),
         migrations.AddConstraint(
             model_name='marriage',
             constraint=models.CheckConstraint(condition=models.Q(('spouse1', models.F('spouse2')), _negated=True), name='chk_spouse_not_same'),

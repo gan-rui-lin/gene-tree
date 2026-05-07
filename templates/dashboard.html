@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">统计看板</h3>
+
+{% if error %}
+    <div class="alert alert-warning">{{ error }}</div>
+{% else %}
+    <form class="row g-2 mb-4" method="get">
+        <div class="col-md-4">
+            <label class="form-label">族谱</label>
+            <select class="form-select" name="genealogy_id">
+                {% for g in genealogies %}
+                    <option value="{{ g.genealogy_id }}" {% if g.genealogy_id == selected_genealogy_id %}selected{% endif %}>
+                        {{ g.title }}（{{ g.surname }}）
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-outline-primary w-100">查看</button>
+        </div>
+    </form>
+
+    <div class="mb-3 text-muted">
+        当前族谱：{{ selected_genealogy.title }}（{{ selected_genealogy.surname }}）
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">成员总数</div>
+                    <div class="display-6">{{ stats.total_members }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">男性成员</div>
+                    <div class="h4 mb-1">{{ stats.male_members }}</div>
+                    <div class="small text-muted">占比 {{ stats.male_ratio }}%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">女性成员</div>
+                    <div class="h4 mb-1">{{ stats.female_members }}</div>
+                    <div class="small text-muted">占比 {{ stats.female_ratio }}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -118,3 +118,16 @@ Response:
 - owner/editor can create/update/delete members
 - viewer is read-only for members and tree/query endpoints
 - owner is required to invite collaborators
+
+10) GET /dashboard?genealogy_id=1
+Response:
+{
+  "genealogy_id": 1,
+  "title": "张氏示例族谱",
+  "surname": "张",
+  "total_members": 6,
+  "male_members": 3,
+  "female_members": 3,
+  "male_ratio": 50.0,
+  "female_ratio": 50.0
+}
