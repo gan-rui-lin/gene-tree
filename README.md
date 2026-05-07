@@ -83,6 +83,7 @@ python manage.py runserver
 
 ## 主要页面
 - `/dashboard-page`
+- `/analysis-page`
 - `/login-page`
 - `/members-page`
 - `/tree-page`

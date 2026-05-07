@@ -793,3 +793,24 @@ def dashboard_page_view(request):
             "stats": stats,
         },
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def analysis_page_view(request):
+    links = GenealogyUser.objects.filter(user=request.user).values_list(
+        "genealogy_id", flat=True
+    )
+    genealogy_ids = list(links)
+    genealogies = Genealogy.objects.filter(genealogy_id__in=genealogy_ids).order_by(
+        "genealogy_id"
+    )
+    members = Member.objects.filter(genealogy_id__in=genealogy_ids).order_by("member_id")
+    return render(
+        request,
+        "analysis.html",
+        {
+            "genealogies": genealogies,
+            "members": members,
+        },
+    )

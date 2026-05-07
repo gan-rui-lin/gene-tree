@@ -58,3 +58,17 @@ Frontend design (Django Template + Bootstrap)
 - Interactions:
   - select member
   - render ancestor tree dynamically by JSON data
+
+6) Analysis page: /analysis-page
+- Input fields:
+  - member selector (Q1)
+  - genealogy selector (Q3/Q4/Q5)
+  - two member selectors (Q6)
+- Display fields:
+  - raw JSON result blocks for each query
+- Interactions:
+  - trigger Q1 spouse+children query
+  - trigger Q3 longest-lifespan-generation query
+  - trigger Q4 unmarried-male-over-50 query
+  - trigger Q5 early-born-members query
+  - trigger Q6 relationship-sql path query

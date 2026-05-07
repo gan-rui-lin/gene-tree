@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">分析查询</h3>
+
+<div class="row g-3">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Q1 配偶及子女</h5>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <select id="q1-member" class="form-select">
+                            {% for m in members %}
+                                <option value="{{ m.member_id }}">{{ m.member_id }} - {{ m.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-primary w-100" onclick="runQ1()">查询</button>
+                    </div>
+                </div>
+                <pre id="q1-output" class="mt-3 bg-light p-2 border rounded small mb-0"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Q3 平均寿命最长辈分</h5>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <select id="q3-genealogy" class="form-select">
+                            {% for g in genealogies %}
+                                <option value="{{ g.genealogy_id }}">{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-primary w-100" onclick="runQ3()">查询</button>
+                    </div>
+                </div>
+                <pre id="q3-output" class="mt-3 bg-light p-2 border rounded small mb-0"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Q4 男性 &gt; 50 且无配偶</h5>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <select id="q4-genealogy" class="form-select">
+                            {% for g in genealogies %}
+                                <option value="{{ g.genealogy_id }}">{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-primary w-100" onclick="runQ4()">查询</button>
+                    </div>
+                </div>
+                <pre id="q4-output" class="mt-3 bg-light p-2 border rounded small mb-0"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Q5 早于本代平均出生年</h5>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <select id="q5-genealogy" class="form-select">
+                            {% for g in genealogies %}
+                                <option value="{{ g.genealogy_id }}">{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-primary w-100" onclick="runQ5()">查询</button>
+                    </div>
+                </div>
+                <pre id="q5-output" class="mt-3 bg-light p-2 border rounded small mb-0"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Q6 亲缘路径（SQL + BFS）</h5>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <select id="q6-id1" class="form-select">
+                            {% for m in members %}
+                                <option value="{{ m.member_id }}">{{ m.member_id }} - {{ m.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select id="q6-id2" class="form-select">
+                            {% for m in members %}
+                                <option value="{{ m.member_id }}">{{ m.member_id }} - {{ m.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-primary w-100" onclick="runQ6()">查询</button>
+                    </div>
+                </div>
+                <pre id="q6-output" class="mt-3 bg-light p-2 border rounded small mb-0"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function fetchJson(url, outputId) {
+    const output = document.getElementById(outputId);
+    output.textContent = '加载中...';
+    try {
+        const res = await fetch(url, { credentials: 'same-origin' });
+        const data = await res.json();
+        output.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+        output.textContent = '请求失败: ' + err;
+    }
+}
+
+function runQ1() {
+    const memberId = document.getElementById('q1-member').value;
+    fetchJson(`/analysis/spouse-children/${memberId}`, 'q1-output');
+}
+
+function runQ3() {
+    const genealogyId = document.getElementById('q3-genealogy').value;
+    fetchJson(`/analysis/longest-lifespan-generation?genealogy_id=${genealogyId}`, 'q3-output');
+}
+
+function runQ4() {
+    const genealogyId = document.getElementById('q4-genealogy').value;
+    fetchJson(`/analysis/unmarried-male-over-50?genealogy_id=${genealogyId}`, 'q4-output');
+}
+
+function runQ5() {
+    const genealogyId = document.getElementById('q5-genealogy').value;
+    fetchJson(`/analysis/early-born-members?genealogy_id=${genealogyId}`, 'q5-output');
+}
+
+function runQ6() {
+    const id1 = document.getElementById('q6-id1').value;
+    const id2 = document.getElementById('q6-id2').value;
+    fetchJson(`/relationship-sql?id1=${id1}&id2=${id2}`, 'q6-output');
+}
+</script>
+{% endblock %}
