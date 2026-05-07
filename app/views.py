@@ -12,10 +12,16 @@ from django.views.decorators.http import require_http_methods
 
 from .models import Genealogy, GenealogyUser, Member, User
 from .services import (
+    build_ancestor_tree,
     build_descendant_tree,
     fetch_ancestors,
     fetch_descendants,
+    fetch_early_born_members,
+    fetch_longest_lifespan_generation,
+    fetch_spouse_and_children,
+    fetch_unmarried_male_over_50,
     shortest_relationship_path,
+    shortest_relationship_path_sql_bfs,
 )
 
 
@@ -401,6 +407,80 @@ def relationship_view(request):
 
 @api_login_required
 @require_http_methods(["GET"])
+def spouse_children_view(request, member_id):
+    member = Member.objects.filter(member_id=member_id).first()
+    if not member:
+        return JsonResponse({"error": "member_not_found"}, status=404)
+    if not _is_member_accessible(request.user, member):
+        return JsonResponse({"error": "permission_denied"}, status=403)
+    return JsonResponse({"items": fetch_spouse_and_children(member_id)})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def longest_lifespan_generation_view(request):
+    accessible_ids = _accessible_genealogy_ids(request.user)
+    if not accessible_ids:
+        return JsonResponse({"error": "no_accessible_genealogy"}, status=403)
+    genealogy_id = _to_int(request.GET.get("genealogy_id"))
+    if genealogy_id is None:
+        genealogy_id = accessible_ids[0]
+    if genealogy_id not in accessible_ids:
+        return JsonResponse({"error": "permission_denied"}, status=403)
+    return JsonResponse(fetch_longest_lifespan_generation(genealogy_id))
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def unmarried_male_over_50_view(request):
+    accessible_ids = _accessible_genealogy_ids(request.user)
+    if not accessible_ids:
+        return JsonResponse({"error": "no_accessible_genealogy"}, status=403)
+    genealogy_id = _to_int(request.GET.get("genealogy_id"))
+    if genealogy_id is None:
+        genealogy_id = accessible_ids[0]
+    if genealogy_id not in accessible_ids:
+        return JsonResponse({"error": "permission_denied"}, status=403)
+    return JsonResponse({"items": fetch_unmarried_male_over_50(genealogy_id)})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def early_born_members_view(request):
+    accessible_ids = _accessible_genealogy_ids(request.user)
+    if not accessible_ids:
+        return JsonResponse({"error": "no_accessible_genealogy"}, status=403)
+    genealogy_id = _to_int(request.GET.get("genealogy_id"))
+    if genealogy_id is None:
+        genealogy_id = accessible_ids[0]
+    if genealogy_id not in accessible_ids:
+        return JsonResponse({"error": "permission_denied"}, status=403)
+    return JsonResponse({"items": fetch_early_born_members(genealogy_id)})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def relationship_sql_view(request):
+    member_id_1 = _to_int(request.GET.get("id1"))
+    member_id_2 = _to_int(request.GET.get("id2"))
+    if not member_id_1 or not member_id_2:
+        return JsonResponse({"error": "id1 and id2 are required"}, status=400)
+
+    member1 = Member.objects.filter(member_id=member_id_1).first()
+    member2 = Member.objects.filter(member_id=member_id_2).first()
+    if not member1 or not member2:
+        return JsonResponse({"error": "member_not_found"}, status=404)
+    if not _is_member_accessible(request.user, member1) or not _is_member_accessible(
+        request.user, member2
+    ):
+        return JsonResponse({"error": "permission_denied"}, status=403)
+
+    path = shortest_relationship_path_sql_bfs(member_id_1, member_id_2)
+    return JsonResponse({"items": path})
+
+
+@api_login_required
+@require_http_methods(["GET"])
 def tree_data_view(request, member_id):
     member = Member.objects.filter(member_id=member_id).first()
     if not member:
@@ -409,6 +489,19 @@ def tree_data_view(request, member_id):
         return JsonResponse({"error": "permission_denied"}, status=403)
 
     tree = build_descendant_tree(root_member_id=member_id)
+    return JsonResponse(tree)
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def ancestors_tree_data_view(request, member_id):
+    member = Member.objects.filter(member_id=member_id).first()
+    if not member:
+        return JsonResponse({"error": "member_not_found"}, status=404)
+    if not _is_member_accessible(request.user, member):
+        return JsonResponse({"error": "permission_denied"}, status=403)
+
+    tree = build_ancestor_tree(root_member_id=member_id)
     return JsonResponse(tree)
 
 
@@ -639,6 +732,31 @@ def tree_page_view(request):
     return render(
         request,
         "tree.html",
+        {
+            "members": members,
+            "selected_member_id": selected_member_id,
+            "tree_json": json.dumps(tree, ensure_ascii=False),
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET"])
+def ancestors_tree_page_view(request):
+    links = GenealogyUser.objects.filter(user=request.user).values_list(
+        "genealogy_id", flat=True
+    )
+    members = Member.objects.filter(genealogy_id__in=links).order_by("member_id")
+    selected_member_id = _to_int(request.GET.get("member_id"))
+    if selected_member_id is None and members:
+        selected_member_id = members[0].member_id
+
+    selected_member = members.filter(member_id=selected_member_id).first()
+    tree = build_ancestor_tree(selected_member.member_id) if selected_member else {}
+
+    return render(
+        request,
+        "ancestors_tree.html",
         {
             "members": members,
             "selected_member_id": selected_member_id,

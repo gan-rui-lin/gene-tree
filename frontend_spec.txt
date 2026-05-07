@@ -49,3 +49,12 @@ Frontend design (Django Template + Bootstrap)
 - Interactions:
   - select root member
   - render descendants tree dynamically by JSON data
+
+5) Ancestor tree page: /ancestors-tree-page
+- Input fields:
+  - member selector
+- Display fields:
+  - ancestor tree (father/mother branches)
+- Interactions:
+  - select member
+  - render ancestor tree dynamically by JSON data

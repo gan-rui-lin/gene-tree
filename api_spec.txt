@@ -99,6 +99,7 @@ Additional APIs for genealogy collaboration:
 - POST /genealogies/{id}/invite
 - GET/PUT/DELETE /members/{id}
 - GET /tree/{id}
+- GET /ancestors-tree/{id}
 
 8) GET /genealogies
 Response:
@@ -130,4 +131,78 @@ Response:
   "female_members": 3,
   "male_ratio": 50.0,
   "female_ratio": 50.0
+}
+
+11) GET /ancestors-tree/{id}
+Example: /ancestors-tree/1005
+Response:
+{
+  "member_id": 1005,
+  "name": "张磊",
+  "father": {
+    "member_id": 1003,
+    "name": "张建国",
+    "father": {
+      "member_id": 1001,
+      "name": "张国富",
+      "father": null,
+      "mother": null
+    },
+    "mother": {
+      "member_id": 1002,
+      "name": "李秀英",
+      "father": null,
+      "mother": null
+    }
+  },
+  "mother": {
+    "member_id": 1004,
+    "name": "王芳",
+    "father": null,
+    "mother": null
+  }
+}
+
+12) GET /analysis/spouse-children/{id}
+Example: /analysis/spouse-children/1003
+Response:
+{
+  "items": [
+    {"relation": "child", "member_id": 1005, "name": "张磊", "gender": "M", "birth_year": 1995, "death_year": null},
+    {"relation": "child", "member_id": 1006, "name": "张敏", "gender": "F", "birth_year": 1998, "death_year": null},
+    {"relation": "spouse", "member_id": 1004, "name": "王芳", "gender": "F", "birth_year": 1970, "death_year": null}
+  ]
+}
+
+13) GET /analysis/longest-lifespan-generation?genealogy_id=1
+Response:
+{
+  "generation": 1,
+  "avg_lifespan": 83.5
+}
+
+14) GET /analysis/unmarried-male-over-50?genealogy_id=1
+Response:
+{
+  "items": [
+    {"member_id": 1010, "name": "张某", "gender": "M", "birth_year": 1960, "age": 66}
+  ]
+}
+
+15) GET /analysis/early-born-members?genealogy_id=1
+Response:
+{
+  "items": [
+    {"member_id": 1001, "name": "张国富", "generation": 1, "birth_year": 1940, "avg_birth_year": 1941.5}
+  ]
+}
+
+16) GET /relationship-sql?id1=1001&id2=1006
+Response:
+{
+  "items": [
+    {"member_id": 1001, "name": "张国富", "via": null},
+    {"member_id": 1003, "name": "张建国", "via": "child"},
+    {"member_id": 1006, "name": "张敏", "via": "child"}
+  ]
 }

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">树形展示（祖先结构）</h3>
+
+<form class="row g-2 mb-3" method="get">
+    <div class="col-md-4">
+        <label class="form-label">选择成员</label>
+        <select name="member_id" class="form-select">
+            {% for member in members %}
+                <option value="{{ member.member_id }}" {% if member.member_id == selected_member_id %}selected{% endif %}>
+                    {{ member.member_id }} - {{ member.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-outline-primary w-100">展示</button>
+    </div>
+</form>
+
+<div id="tree-container" class="tree-container"></div>
+
+<script>
+const treeData = JSON.parse('{{ tree_json|escapejs }}');
+
+function createNodeElement(node) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="node-label">${node.member_id} - ${node.name}</span>`;
+    const hasFather = !!node.father;
+    const hasMother = !!node.mother;
+    if (hasFather || hasMother) {
+        const ul = document.createElement('ul');
+        if (hasFather) {
+            const fatherLi = document.createElement('li');
+            fatherLi.innerHTML = '<span class="text-muted small">父系</span>';
+            const fatherUl = document.createElement('ul');
+            fatherUl.appendChild(createNodeElement(node.father));
+            fatherLi.appendChild(fatherUl);
+            ul.appendChild(fatherLi);
+        }
+        if (hasMother) {
+            const motherLi = document.createElement('li');
+            motherLi.innerHTML = '<span class="text-muted small">母系</span>';
+            const motherUl = document.createElement('ul');
+            motherUl.appendChild(createNodeElement(node.mother));
+            motherLi.appendChild(motherUl);
+            ul.appendChild(motherLi);
+        }
+        li.appendChild(ul);
+    }
+    return li;
+}
+
+if (treeData && treeData.member_id) {
+    const ul = document.createElement('ul');
+    ul.appendChild(createNodeElement(treeData));
+    document.getElementById('tree-container').appendChild(ul);
+} else {
+    document.getElementById('tree-container').innerHTML = '<div class="text-muted">暂无祖先树数据</div>';
+}
+</script>
+{% endblock %}
