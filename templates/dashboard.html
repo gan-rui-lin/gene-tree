@@ -25,9 +25,10 @@
         当前族谱：{{ selected_genealogy.title }}（{{ selected_genealogy.surname }}）
     </div>
 
-    <div class="row g-3">
+    {# Stat cards #}
+    <div class="row g-3 mb-4">
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="text-muted small">成员总数</div>
                     <div class="display-6">{{ stats.total_members }}</div>
@@ -35,7 +36,7 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="text-muted small">男性成员</div>
                     <div class="h4 mb-1">{{ stats.male_members }}</div>
@@ -44,11 +45,62 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="text-muted small">女性成员</div>
                     <div class="h4 mb-1">{{ stats.female_members }}</div>
                     <div class="small text-muted">占比 {{ stats.female_ratio }}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Charts row #}
+    <div class="row g-3">
+        {# Pie chart #}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">男女比例</h5>
+                    <div class="d-flex align-items-center justify-content-center gap-4">
+                        <div class="pie-chart"
+                             style="background: conic-gradient(
+                                 var(--color-primary) 0% {{ stats.male_ratio }}%,
+                                 #d63384 {{ stats.male_ratio }}% 100%
+                             );">
+                            <div class="pie-center">
+                                <span class="pie-total">{{ stats.total_members }}</span>
+                                <span class="pie-label">总人数</span>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="legend-dot" style="background: var(--color-primary);"></span>
+                                <span class="small">男性 {{ stats.male_members }} 人（{{ stats.male_ratio }}%）</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="legend-dot" style="background: #d63384;"></span>
+                                <span class="small">女性 {{ stats.female_members }} 人（{{ stats.female_ratio }}%）</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Trend placeholder #}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">成员数量趋势</h5>
+                    <div class="trend-placeholder">
+                        <div class="trend-bars">
+                            {% for i in "12345678" %}
+                            <div class="trend-bar" style="height: {% widthratio forloop.counter 8 100 %}%;"></div>
+                            {% endfor %}
+                        </div>
+                        <div class="text-center text-muted small mt-2">按辈分分布（示例占位）</div>
+                    </div>
                 </div>
             </div>
         </div>

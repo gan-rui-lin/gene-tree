@@ -442,3 +442,73 @@ main.container {
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-md);
 }
+
+/* ===== Pie Chart ===== */
+.pie-chart {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    position: relative;
+}
+
+.pie-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    background: var(--color-surface);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pie-total {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1;
+}
+
+.pie-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* ===== Trend Bars ===== */
+.trend-placeholder {
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.trend-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 100px;
+    padding: 0 0.5rem;
+}
+
+.trend-bar {
+    flex: 1;
+    background: linear-gradient(to top, var(--color-primary), rgba(67, 97, 238, 0.4));
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    min-height: 8px;
+    transition: height 0.3s;
+}
+
+.trend-bar:hover {
+    background: var(--color-primary);
+}
