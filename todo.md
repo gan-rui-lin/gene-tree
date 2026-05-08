@@ -36,13 +36,13 @@
 - [x] 每种样本输出固定随机种子，保证复现。
 
 ### C. 导入流程标准化
-- [ ] 固化导入顺序文档：`member -> parent_child -> marriage`。
-- [ ] 为 `sql/import_export.sql` 增加 Windows 路径示例与权限注意事项（`secure_file_priv`）。
-- [ ] 补一个一键导入脚本（PowerShell）：自动检测文件存在并逐表导入。
+- [x] 固化导入顺序文档：`member -> parent_child -> marriage`。
+- [x] 为 `sql/import_export.sql` 增加 Windows 路径示例与权限注意事项（`secure_file_priv`）。
+- [x] 补一个一键导入脚本（PowerShell）：自动检测文件存在并逐表导入。
 
 ### D. 数据质量校验
-- [ ] 导入后校验 SQL：计数、孤儿记录、非法关系（father/mother 之外）检查。
-- [ ] 校验年龄合理性：`birth_year <= death_year`（若 death_year 不为空）。
-- [ ] 校验亲缘路径可达性抽样（随机 100 组成员）。
+- [x] 导入后校验 SQL：计数、孤儿记录、非法关系（father/mother 之外）检查。
+- [x] 校验年龄合理性：`birth_year <= death_year`（若 death_year 不为空）。
+- [x] 校验亲缘路径可达性抽样（随机 100 组成员）。
 
 ---

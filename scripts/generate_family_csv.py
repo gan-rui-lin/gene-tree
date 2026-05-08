@@ -1,294 +1,281 @@
+"""
+Generate realistic family tree CSV data.
+
+Timeline: dynamically calculated ~1800-2026 (depending on target size).
+Marriage: male 22~60, female 20~55, age gap <= 10, no marriage within 3 generations.
+Alive probability: age-dependent (younger = more likely alive in 2026).
+"""
 import argparse
 import csv
 import math
 import random
 from pathlib import Path
 
-# ===== Chinese Name Pools =====
-SURNAMES = ["赵", "钱", "孙", "李", "周", "吴", "郑", "王", "冯", "陈",
-            "褚", "卫", "蒋", "沈", "韩", "杨", "朱", "秦", "尤", "许",
-            "何", "吕", "施", "张", "孔", "曹", "严", "华", "金", "魏",
-            "陶", "姜", "戚", "谢", "邹", "苏", "潘", "葛", "范", "彭",
-            "鲁", "韦", "昌", "马", "苗", "凤", "花", "方", "俞", "任",
-            "袁", "柳", "酆", "鲍", "史", "唐", "费", "廉", "岑", "薛",
-            "雷", "贺", "倪", "汤", "滕", "殷", "罗", "毕", "郝", "邬",
-            "安", "常", "乐", "于", "时", "傅", "皮", "卞", "齐", "康",
-            "伍", "余", "元", "卜", "顾", "孟", "平", "黄", "和", "穆",
-            "萧", "尹", "姚", "邵", "湛", "汪", "祁", "毛", "禹", "狄"]
+YEAR_CAP = 2026
+MONTH_CAP = 5
 
-GIVEN_NAMES_MALE = [
+SURNAMES = [
+    "赵", "钱", "孙", "李", "周", "吴", "郑", "王", "冯", "陈",
+    "卫", "蒋", "沈", "韩", "杨", "朱", "秦", "许", "何", "张",
+    "孔", "曹", "严", "金", "魏", "陶", "姜", "谢", "邹", "苏",
+    "潘", "范", "彭", "鲁", "马", "方", "任", "袁", "柳", "唐",
+    "薛", "雷", "贺", "汤", "罗", "郝", "安", "常", "于", "傅",
+    "齐", "康", "伍", "余", "黄", "萧", "尹", "姚", "汪", "毛",
+    "戴", "宋", "熊", "纪", "舒", "屈", "项", "祝", "董", "梁",
+    "杜", "阮", "蓝", "席", "季", "麻", "强", "贾", "路", "娄",
+    "危", "江", "童", "颜", "郭", "梅", "盛", "林", "刁", "钟",
+    "徐", "邱", "骆", "高", "夏", "蔡", "田", "樊", "胡", "凌",
+]
+GIVEN_M = [
     "伟", "强", "磊", "洋", "勇", "军", "杰", "涛", "明", "辉",
     "鑫", "斌", "波", "宇", "浩", "凯", "健", "俊", "飞", "鹏",
     "志", "刚", "建", "文", "龙", "海", "林", "松", "彬", "泽",
-    "天", "达", "奇", "思", "睿", "博", "宏", "毅", "卓", "翔",
-    "致", "远", "俊", "驰", "雨", "泽", "烨", "熠", "奕", "鸿",
+    "天", "达", "奇", "睿", "博", "宏", "毅", "卓", "翔", "远",
+    "驰", "烨", "熠", "奕", "鸿", "昊", "宸", "轩", "哲", "晨",
+]
+GIVEN_F = [
+    "芳", "娜", "敏", "静", "丽", "秀", "淑", "惠", "珠", "雅",
+    "芝", "玉", "萍", "红", "娥", "玲", "芬", "燕", "彩", "春",
+    "菊", "兰", "凤", "洁", "梅", "琳", "素", "云", "莲", "雪",
+    "荣", "爱", "霞", "香", "月", "莺", "媛", "艳", "瑞", "佳",
+    "怡", "婷", "颖", "欣", "瑶", "薇", "梦", "琪", "蕾", "璐",
 ]
 
-GIVEN_NAMES_FEMALE = [
-    "芳", "娜", "敏", "静", "丽", "强", "磊", "洋", "秀英", "玉兰",
-    "淑", "惠", "珠", "翠", "雅", "芝", "玉", "萍", "红", "娥",
-    "玲", "芬", "芳", "燕", "彩", "春", "菊", "兰", "凤", "洁",
-    "梅", "琳", "素", "云", "莲", "真", "环", "雪", "荣", "爱",
-    "妹", "霞", "香", "月", "莺", "媛", "艳", "瑞", "凡", "佳",
-]
+
+def _clamp(y, m=1, d=1):
+    if y > YEAR_CAP or (y == YEAR_CAP and m > MONTH_CAP):
+        return YEAR_CAP, MONTH_CAP, 1
+    return y, m, d
 
 
-def _poisson_sample(lam):
-    """Knuth's algorithm for Poisson sampling."""
-    l = math.exp(-lam)
-    k = 0
-    p = 1.0
-    while True:
-        k += 1
-        p *= random.random()
-        if p < l:
-            return k - 1
-
-
-def _poisson_children(avg, min_c, max_c):
-    """Poisson-distributed child count clamped to [min_c, max_c]."""
-    val = _poisson_sample(avg)
-    return max(min_c, min(max_c, val))
-
-
-def _uniform_children(_avg, min_c, max_c):
-    return random.randint(min_c, max_c)
-
-
-def new_member(member_id, genealogy_id, generation, gender, surname,
-               alive_prob, base_year=1900, gen_span=25):
-    """Create a member dict with Chinese name and realistic life dates."""
-    given_pool = GIVEN_NAMES_MALE if gender == "M" else GIVEN_NAMES_FEMALE
-    given = random.choice(given_pool)
-    # 30% chance of two-character given name
+def _name(surname, gender):
+    pool = GIVEN_M if gender == "M" else GIVEN_F
+    g = random.choice(pool)
     if random.random() < 0.3:
-        given += random.choice(given_pool)
-    name = surname + given
-
-    birth_year = base_year + generation * gen_span + random.randint(0, 5)
-    is_alive = random.random() < alive_prob
-    death_year = "" if is_alive else birth_year + random.randint(40, 90)
-
-    return {
-        "member_id": member_id,
-        "genealogy_id": genealogy_id,
-        "name": name,
-        "gender": gender,
-        "birth_year": birth_year,
-        "death_year": death_year,
-        "biography": f"第{generation}代",
-    }
+        g += random.choice(pool)
+    return surname + g
 
 
-def generate_data(
-    genealogy_count,
-    generations,
-    min_children,
-    max_children,
-    seed,
-    start_member_id,
-    start_marriage_id,
-    gender_ratio,
-    marriage_prob,
-    children_dist,
-    avg_children,
-    alive_prob,
-):
+def _alive_prob(birth_year):
+    """Age-dependent alive probability in 2026."""
+    age = YEAR_CAP - birth_year
+    if age <= 30:
+        return 0.98
+    if age <= 50:
+        return 0.90
+    if age <= 70:
+        return 0.50
+    if age <= 85:
+        return 0.15
+    return 0.02
+
+
+def _member(mid, gid, birth_year, gender, surname):
+    by, _, _ = _clamp(birth_year)
+    alive = random.random() < _alive_prob(by)
+    if alive:
+        dy = ""
+    else:
+        dy = by + random.randint(40, 90)
+        dy, _, _ = _clamp(dy)
+        dy = str(max(dy, by + 1))
+    return {"member_id": mid, "genealogy_id": gid, "name": _name(surname, gender),
+            "gender": gender, "birth_year": by, "death_year": dy, "biography": ""}
+
+
+def _ancestors(mid, pmap, depth=3):
+    anc, q = set(), [mid]
+    for _ in range(depth):
+        nq = []
+        for x in q:
+            for p in pmap.get(x, []):
+                anc.add(p)
+                nq.append(p)
+        q = nq
+    return anc
+
+
+def _eligible(m, f, year, pmap):
+    am, af = year - m["birth_year"], year - f["birth_year"]
+    if am < 22 or am > 60 or af < 20 or af > 55:
+        return False
+    if abs(m["birth_year"] - f["birth_year"]) > 10:
+        return False
+    if (m["death_year"] and int(m["death_year"]) <= year) or \
+       (f["death_year"] and int(f["death_year"]) <= year):
+        return False
+    if _ancestors(m["member_id"], pmap) & _ancestors(f["member_id"], pmap):
+        return False
+    return True
+
+
+def _marriage_end(s1, s2):
+    d1 = int(s1["death_year"]) if s1["death_year"] else 9999
+    d2 = int(s2["death_year"]) if s2["death_year"] else 9999
+    ey = min(d1, d2)
+    if ey < 9999:
+        ey, em, ed = _clamp(ey, 6, 1)
+        return f"{ey}-{em:02d}-{ed:02d}", "deceased"
+    return "", "active"
+
+
+def generate(target, seed, gid=1, mid0=10000, marr0=10000,
+             min_ch=3, max_ch=5, gen_span=20,
+             start_year=None, n_founders=None):
     random.seed(seed)
-    member_id = start_member_id
-    marriage_id = start_marriage_id
+    mid, marr_id = mid0, marr0
+    surname = random.choice(SURNAMES)
 
-    members = []
-    parent_child = []
-    marriages = []
-    pc_set = set()
-    marriage_set = set()
+    # Determine founding couples and start year
+    if n_founders is None:
+        n_founders = max(10, target // 30)
+    if start_year is None:
+        if n_founders >= target:
+            start_year = 1990
+        else:
+            gens = max(5, math.ceil(math.log(target / n_founders) / math.log(1.8)))
+            start_year = max(2010 - gens * gen_span, 1400)
 
-    child_fn = (_poisson_children if children_dist == "poisson"
-                else _uniform_children)
+    members, pc, marriages = [], [], []
+    pc_set, marr_set = set(), set()
+    pmap = {}
 
-    for genealogy_id in range(1, genealogy_count + 1):
-        surname = random.choice(SURNAMES)
+    # Founding couples
+    couples = []
+    for _ in range(n_founders):
+        by = start_year + random.randint(0, 8)
+        f = _member(mid, gid, by, "M", surname); mid += 1
+        m = _member(mid, gid, by + random.randint(-3, 2), "F", surname); mid += 1
+        members.extend([f, m])
+        sy, sm, sd = _clamp(by + 22, 1, 1)
+        ed, st = _marriage_end(f, m)
+        marriages.append({"marriage_id": marr_id, "spouse1_id": f["member_id"],
+                          "spouse2_id": m["member_id"],
+                          "start_date": f"{sy}-{sm:02d}-{sd:02d}",
+                          "end_date": ed, "status": st})
+        marr_set.add((f["member_id"], m["member_id"]))
+        marr_id += 1
+        couples.append((f, m))
 
-        # Create founding couple
-        father = new_member(member_id, genealogy_id, 0, "M", surname, alive_prob)
-        member_id += 1
-        mother = new_member(member_id, genealogy_id, 0, "F", surname, alive_prob)
-        member_id += 1
-        members.extend([father, mother])
+    pool_m, pool_f = [], []
 
-        couples = [(father, mother)]
-        marriages.append({
-            "marriage_id": marriage_id,
-            "spouse1_id": father["member_id"],
-            "spouse2_id": mother["member_id"],
-            "start_date": f"{1900 + random.randint(0, 5)}-01-01",
-            "end_date": "",
-            "status": "active",
-        })
-        marriage_set.add((father["member_id"], mother["member_id"]))
-        marriage_id += 1
+    for gen in range(1, 25):
+        if len(members) >= target:
+            break
+        bb = start_year + gen * gen_span
+        if bb > YEAR_CAP - 15:
+            break
 
-        # Global unmarried pool per genealogy
-        unmarried_m = []
-        unmarried_f = []
+        # Children from active couples
+        for fa, mo in couples:
+            n_ch = random.randint(min_ch, max_ch)
+            gs = ["M", "F"] if n_ch >= 2 else []
+            if n_ch >= 2:
+                for _ in range(n_ch - 2):
+                    gs.append("M" if random.random() < 0.5 else "F")
+                random.shuffle(gs)
+            elif n_ch == 1:
+                gs = ["M" if random.random() < 0.5 else "F"]
 
-        for gen in range(1, generations + 1):
-            next_couples = []
-            # Children of this generation
-            gen_males = []
-            gen_females = []
+            for g in gs:
+                cby = bb + random.randint(-3, gen_span + 3)
+                c = _member(mid, gid, cby, g, surname); mid += 1
+                members.append(c)
+                for pid, rt in [(fa["member_id"], "father"), (mo["member_id"], "mother")]:
+                    pair = (pid, c["member_id"])
+                    if pair not in pc_set:
+                        pc.append({"parent_id": pid, "child_id": c["member_id"],
+                                   "relation_type": rt})
+                        pc_set.add(pair)
+                        pmap.setdefault(c["member_id"], []).append(pid)
+                (pool_m if g == "M" else pool_f).append(c)
 
-            for f, m in couples:
-                child_count = child_fn(avg_children, min_children, max_children)
+        # Marriages from generation 4+ (3-gen gap cleared)
+        new_couples = []
+        if gen >= 4:
+            random.shuffle(pool_m)
+            random.shuffle(pool_f)
+            um, uf = set(), set()
+            for i, male in enumerate(pool_m):
+                if len(members) >= target:
+                    break
+                for j, female in enumerate(pool_f):
+                    if j in uf:
+                        continue
+                    my = max(male["birth_year"], female["birth_year"]) + 22
+                    my = min(my, YEAR_CAP)
+                    if not _eligible(male, female, my, pmap):
+                        continue
+                    if random.random() > 0.9:
+                        continue
+                    ed, st = _marriage_end(male, female)
+                    sy, sm, sd = _clamp(my, 1, 1)
+                    marriages.append({"marriage_id": marr_id,
+                                      "spouse1_id": male["member_id"],
+                                      "spouse2_id": female["member_id"],
+                                      "start_date": f"{sy}-{sm:02d}-{sd:02d}",
+                                      "end_date": ed, "status": st})
+                    marr_set.add((male["member_id"], female["member_id"]))
+                    marr_id += 1
+                    new_couples.append((male, female))
+                    um.add(i); uf.add(j); break
+            pool_m = [x for i, x in enumerate(pool_m) if i not in um]
+            pool_f = [x for i, x in enumerate(pool_f) if i not in uf]
 
-                genders = []
-                if child_count >= 2:
-                    genders = ["M", "F"]
-                    for _ in range(child_count - 2):
-                        genders.append("M" if random.random() < gender_ratio else "F")
-                    random.shuffle(genders)
-                else:
-                    genders = ["M" if random.random() < gender_ratio else "F"]
+        couples = new_couples
 
-                for gender in genders:
-                    child = new_member(member_id, genealogy_id, gen, gender, surname, alive_prob)
-                    member_id += 1
-                    members.append(child)
-
-                    if f["member_id"] != child["member_id"]:
-                        pair_f = (f["member_id"], child["member_id"])
-                        if pair_f not in pc_set:
-                            parent_child.append({
-                                "parent_id": f["member_id"],
-                                "child_id": child["member_id"],
-                                "relation_type": "father",
-                            })
-                            pc_set.add(pair_f)
-                    if m["member_id"] != child["member_id"]:
-                        pair_m = (m["member_id"], child["member_id"])
-                        if pair_m not in pc_set:
-                            parent_child.append({
-                                "parent_id": m["member_id"],
-                                "child_id": child["member_id"],
-                                "relation_type": "mother",
-                            })
-                            pc_set.add(pair_m)
-
-                    if gender == "M":
-                        gen_males.append(child)
-                    else:
-                        gen_females.append(child)
-
-            # Add to unmarried pool
-            unmarried_m.extend(gen_males)
-            unmarried_f.extend(gen_females)
-
-            # Pair from global pool (cross-family within same genealogy)
-            random.shuffle(unmarried_m)
-            random.shuffle(unmarried_f)
-            pair_count = min(len(unmarried_m), len(unmarried_f))
-            paired_m = []
-            paired_f = []
-            for i in range(pair_count):
-                if random.random() > marriage_prob:
-                    continue
-                s1 = unmarried_m[i]
-                s2 = unmarried_f[i]
-                m_pair = (s1["member_id"], s2["member_id"])
-                m_pair_rev = (s2["member_id"], s1["member_id"])
-                if m_pair in marriage_set or m_pair_rev in marriage_set:
-                    continue
-                marriages.append({
-                    "marriage_id": marriage_id,
-                    "spouse1_id": s1["member_id"],
-                    "spouse2_id": s2["member_id"],
-                    "start_date": f"{1900 + gen * 25 + 20}-01-01",
-                    "end_date": "",
-                    "status": "active",
-                })
-                marriage_set.add(m_pair)
-                marriage_id += 1
-                next_couples.append((s1, s2))
-                paired_m.append(i)
-                paired_f.append(i)
-
-            # Remove paired from unmarried pool
-            unmarried_m = [u for i, u in enumerate(unmarried_m) if i not in paired_m]
-            unmarried_f = [u for i, u in enumerate(unmarried_f) if i not in paired_f]
-
-            couples = next_couples
-            if not couples:
-                break
-
-    return members, parent_child, marriages
+    members = members[:target]
+    vids = {m["member_id"] for m in members}
+    pc = [r for r in pc if r["parent_id"] in vids and r["child_id"] in vids]
+    marriages = [r for r in marriages
+                 if r["spouse1_id"] in vids and r["spouse2_id"] in vids]
+    return members, pc, marriages, start_year
 
 
-def write_csv(path, rows, fieldnames):
+def write_csv(path, rows, fields):
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate family demo CSV data.")
-    parser.add_argument("--out-dir", default="sql/generated", help="Output directory")
-    parser.add_argument("--genealogy-count", type=int, default=2)
-    parser.add_argument("--generations", type=int, default=4)
-    parser.add_argument("--min-children", type=int, default=1)
-    parser.add_argument("--max-children", type=int, default=3)
-    parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--gender-ratio", type=float, default=0.5,
-                        help="Probability of male child (0-1, default 0.5)")
-    parser.add_argument("--marriage-probability", type=float, default=0.8,
-                        help="Probability a child pairs into marriage (0-1, default 0.8)")
-    parser.add_argument("--children-dist", choices=["uniform", "poisson"], default="uniform",
-                        help="Children count distribution: uniform or poisson (default uniform)")
-    parser.add_argument("--avg-children", type=float, default=2.0,
-                        help="Average children per couple for poisson distribution (default 2.0)")
-    parser.add_argument("--alive-probability", type=float, default=0.3,
-                        help="Probability a member is still alive, i.e. death_year is empty (0-1, default 0.3)")
-    args = parser.parse_args()
+    p = argparse.ArgumentParser(description="Generate family CSV data.")
+    p.add_argument("--out-dir", default="sql/generated")
+    p.add_argument("--target", type=int, default=500)
+    p.add_argument("--seed", type=int, default=2026)
+    p.add_argument("--genealogy-id", type=int, default=1)
+    p.add_argument("--start-member-id", type=int, default=10000)
+    p.add_argument("--start-marriage-id", type=int, default=10000)
+    p.add_argument("--min-children", type=int, default=3)
+    p.add_argument("--max-children", type=int, default=5)
+    p.add_argument("--gen-span", type=int, default=20)
+    p.add_argument("--start-year", type=int, default=0,
+                   help="Start year (0 = auto)")
+    p.add_argument("--founders", type=int, default=0,
+                   help="Number of founding couples (0 = auto)")
+    args = p.parse_args()
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
 
-    members, parent_child, marriages = generate_data(
-        genealogy_count=args.genealogy_count,
-        generations=args.generations,
-        min_children=args.min_children,
-        max_children=args.max_children,
-        seed=args.seed,
-        start_member_id=10000,
-        start_marriage_id=10000,
-        gender_ratio=args.gender_ratio,
-        marriage_prob=args.marriage_probability,
-        children_dist=args.children_dist,
-        avg_children=args.avg_children,
-        alive_prob=args.alive_probability,
+    members, pc, marr, sy = generate(
+        target=args.target, seed=args.seed, gid=args.genealogy_id,
+        mid0=args.start_member_id, marr0=args.start_marriage_id,
+        min_ch=args.min_children, max_ch=args.max_children,
+        gen_span=args.gen_span,
+        start_year=args.start_year if args.start_year > 0 else None,
+        n_founders=args.founders if args.founders > 0 else None,
     )
-
-    write_csv(
-        out_dir / "member.csv",
-        members,
-        ["member_id", "genealogy_id", "name", "gender", "birth_year", "death_year", "biography"],
-    )
-    write_csv(
-        out_dir / "parent_child.csv",
-        parent_child,
-        ["parent_id", "child_id", "relation_type"],
-    )
-    write_csv(
-        out_dir / "marriage.csv",
-        marriages,
-        ["marriage_id", "spouse1_id", "spouse2_id", "start_date", "end_date", "status"],
-    )
-
-    print(f"Generated {len(members)} members")
-    print(f"Generated {len(parent_child)} parent_child rows")
-    print(f"Generated {len(marriages)} marriages")
-    print(f"Output dir: {out_dir}")
+    write_csv(out / "member.csv", members,
+              ["member_id", "genealogy_id", "name", "gender",
+               "birth_year", "death_year", "biography"])
+    write_csv(out / "parent_child.csv", pc,
+              ["parent_id", "child_id", "relation_type"])
+    write_csv(out / "marriage.csv", marr,
+              ["marriage_id", "spouse1_id", "spouse2_id",
+               "start_date", "end_date", "status"])
+    print(f"start_year={sy}, {len(members)} members, {len(pc)} pc, {len(marr)} marriages")
 
 
 if __name__ == "__main__":
