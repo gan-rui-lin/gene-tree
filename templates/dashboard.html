@@ -3,7 +3,20 @@
 <h3 class="page-heading">统计看板</h3>
 
 {% if error %}
-    <div class="alert alert-warning">{{ error }}</div>
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state">
+                <div class="empty-state-icon">📊</div>
+                <div class="empty-state-title">暂无统计数据</div>
+                <div class="empty-state-desc">
+                    {{ error }}前往「成员管理」页面创建族谱并添加成员后，这里将展示统计看板。
+                </div>
+                <div class="empty-state-action">
+                    <a href="/members-page" class="btn btn-primary">前往成员管理</a>
+                </div>
+            </div>
+        </div>
+    </div>
 {% else %}
     <form class="row g-2 mb-4" method="get">
         <div class="col-md-4">

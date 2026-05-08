@@ -78,7 +78,12 @@ if (treeData && treeData.member_id) {
     ul.appendChild(createNodeElement(treeData));
     document.getElementById('tree-container').appendChild(ul);
 } else {
-    document.getElementById('tree-container').innerHTML = '<div class="text-muted">暂无树形数据</div>';
+    document.getElementById('tree-container').innerHTML =
+        '<div class="empty-state">' +
+            '<div class="empty-state-icon">🌳</div>' +
+            '<div class="empty-state-title">暂无树形数据</div>' +
+            '<div class="empty-state-desc">请先在上方选择一位成员并点击「展示」，即可查看其后代树形结构。</div>' +
+        '</div>';
 }
 </script>
 {% endblock %}

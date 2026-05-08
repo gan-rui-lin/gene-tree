@@ -199,13 +199,31 @@
                 </tr>
                 {% endif %}
             {% empty %}
-                <tr><td colspan="7" class="text-center">暂无数据</td></tr>
+                <tr><td colspan="7">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">👥</div>
+                        <div class="empty-state-title">暂无成员</div>
+                        <div class="empty-state-desc">
+                            使用上方「新增成员」表单添加第一位家族成员，或通过姓名前缀搜索已有成员。
+                        </div>
+                    </div>
+                </td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
 {% else %}
-    <div class="alert alert-warning">当前用户还没有可访问的族谱。请先创建族谱。</div>
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <div class="empty-state-title">还没有族谱</div>
+                <div class="empty-state-desc">
+                    族谱是管理家族成员的起点。创建你的第一个族谱，然后添加成员、邀请协作者，开始构建家族树。
+                </div>
+            </div>
+        </div>
+    </div>
 {% endif %}
 
 {# Delete confirmation modal #}

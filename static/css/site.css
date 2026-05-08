@@ -886,3 +886,40 @@ main.container {
 .skeleton-hidden {
     display: none;
 }
+
+/* ===== Empty State ===== */
+.empty-state {
+    text-align: center;
+    padding: var(--space-xl) var(--space-md);
+}
+
+.empty-state-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--space-md);
+    background: var(--color-primary-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+
+.empty-state-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+.empty-state-desc {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    max-width: 360px;
+    margin: 0 auto var(--space-lg);
+    line-height: 1.6;
+}
+
+.empty-state-action .btn {
+    min-width: 140px;
+}
