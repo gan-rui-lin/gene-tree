@@ -51,7 +51,7 @@ def _poisson_children(avg, min_c, max_c):
     return max(min_c, min(max_c, val))
 
 
-def _uniform_children(min_c, max_c):
+def _uniform_children(_avg, min_c, max_c):
     return random.randint(min_c, max_c)
 
 
@@ -101,9 +101,7 @@ def generate_data(
     members = []
     parent_child = []
     marriages = []
-    # Track existing parent-child pairs for duplicate protection
     pc_set = set()
-    # Track existing marriage pairs for duplicate protection
     marriage_set = set()
 
     child_fn = (_poisson_children if children_dist == "poisson"
@@ -131,76 +129,94 @@ def generate_data(
         marriage_set.add((father["member_id"], mother["member_id"]))
         marriage_id += 1
 
+        # Global unmarried pool per genealogy
+        unmarried_m = []
+        unmarried_f = []
+
         for gen in range(1, generations + 1):
             next_couples = []
-            for f, m in couples:
-                if children_dist == "poisson":
-                    child_count = _poisson_children(avg_children, min_children, max_children)
-                else:
-                    child_count = _uniform_children(min_children, max_children)
+            # Children of this generation
+            gen_males = []
+            gen_females = []
 
-                children = []
-                for _ in range(child_count):
-                    # Gender based on ratio
-                    gender = "M" if random.random() < gender_ratio else "F"
+            for f, m in couples:
+                child_count = child_fn(avg_children, min_children, max_children)
+
+                genders = []
+                if child_count >= 2:
+                    genders = ["M", "F"]
+                    for _ in range(child_count - 2):
+                        genders.append("M" if random.random() < gender_ratio else "F")
+                    random.shuffle(genders)
+                else:
+                    genders = ["M" if random.random() < gender_ratio else "F"]
+
+                for gender in genders:
                     child = new_member(member_id, genealogy_id, gen, gender, surname, alive_prob)
                     member_id += 1
                     members.append(child)
-                    children.append(child)
 
-                    # Anomaly protection: prevent self-loop
-                    if f["member_id"] == child["member_id"]:
-                        continue
-                    if m["member_id"] == child["member_id"]:
-                        continue
+                    if f["member_id"] != child["member_id"]:
+                        pair_f = (f["member_id"], child["member_id"])
+                        if pair_f not in pc_set:
+                            parent_child.append({
+                                "parent_id": f["member_id"],
+                                "child_id": child["member_id"],
+                                "relation_type": "father",
+                            })
+                            pc_set.add(pair_f)
+                    if m["member_id"] != child["member_id"]:
+                        pair_m = (m["member_id"], child["member_id"])
+                        if pair_m not in pc_set:
+                            parent_child.append({
+                                "parent_id": m["member_id"],
+                                "child_id": child["member_id"],
+                                "relation_type": "mother",
+                            })
+                            pc_set.add(pair_m)
 
-                    # Anomaly protection: prevent duplicate parent-child
-                    pair_f = (f["member_id"], child["member_id"])
-                    pair_m = (m["member_id"], child["member_id"])
-                    if pair_f not in pc_set:
-                        parent_child.append({
-                            "parent_id": f["member_id"],
-                            "child_id": child["member_id"],
-                            "relation_type": "father",
-                        })
-                        pc_set.add(pair_f)
-                    if pair_m not in pc_set:
-                        parent_child.append({
-                            "parent_id": m["member_id"],
-                            "child_id": child["member_id"],
-                            "relation_type": "mother",
-                        })
-                        pc_set.add(pair_m)
+                    if gender == "M":
+                        gen_males.append(child)
+                    else:
+                        gen_females.append(child)
 
-                # Pair children into couples based on marriage probability
-                males = [c for c in children if c["gender"] == "M"]
-                females = [c for c in children if c["gender"] == "F"]
-                random.shuffle(males)
-                random.shuffle(females)
-                pair_count = min(len(males), len(females))
-                for i in range(pair_count):
-                    if random.random() > marriage_prob:
-                        continue
-                    spouse1 = males[i]
-                    spouse2 = females[i]
+            # Add to unmarried pool
+            unmarried_m.extend(gen_males)
+            unmarried_f.extend(gen_females)
 
-                    # Anomaly protection: prevent duplicate marriage
-                    m_pair = (spouse1["member_id"], spouse2["member_id"])
-                    m_pair_rev = (spouse2["member_id"], spouse1["member_id"])
-                    if m_pair in marriage_set or m_pair_rev in marriage_set:
-                        continue
+            # Pair from global pool (cross-family within same genealogy)
+            random.shuffle(unmarried_m)
+            random.shuffle(unmarried_f)
+            pair_count = min(len(unmarried_m), len(unmarried_f))
+            paired_m = []
+            paired_f = []
+            for i in range(pair_count):
+                if random.random() > marriage_prob:
+                    continue
+                s1 = unmarried_m[i]
+                s2 = unmarried_f[i]
+                m_pair = (s1["member_id"], s2["member_id"])
+                m_pair_rev = (s2["member_id"], s1["member_id"])
+                if m_pair in marriage_set or m_pair_rev in marriage_set:
+                    continue
+                marriages.append({
+                    "marriage_id": marriage_id,
+                    "spouse1_id": s1["member_id"],
+                    "spouse2_id": s2["member_id"],
+                    "start_date": f"{1900 + gen * 25 + 20}-01-01",
+                    "end_date": "",
+                    "status": "active",
+                })
+                marriage_set.add(m_pair)
+                marriage_id += 1
+                next_couples.append((s1, s2))
+                paired_m.append(i)
+                paired_f.append(i)
 
-                    marriages.append({
-                        "marriage_id": marriage_id,
-                        "spouse1_id": spouse1["member_id"],
-                        "spouse2_id": spouse2["member_id"],
-                        "start_date": f"{1900 + gen * 25 + 20}-01-01",
-                        "end_date": "",
-                        "status": "active",
-                    })
-                    marriage_set.add(m_pair)
-                    marriage_id += 1
-                    next_couples.append((spouse1, spouse2))
+            # Remove paired from unmarried pool
+            unmarried_m = [u for i, u in enumerate(unmarried_m) if i not in paired_m]
+            unmarried_f = [u for i, u in enumerate(unmarried_f) if i not in paired_f]
+
             couples = next_couples
             if not couples:
                 break

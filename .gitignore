@@ -57,3 +57,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Generated data (regenerate with: python scripts/generate_all.py)
+sql/generated/
