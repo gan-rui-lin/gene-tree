@@ -127,7 +127,11 @@ function renderEmpty(msg) {
 }
 
 function renderLoading() {
-    return '<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> 查询中...</div>';
+    return '<div class="skeleton-card" style="margin-top:0.5rem;">' +
+        '<div class="skeleton skeleton-text medium"></div>' +
+        '<div class="skeleton skeleton-text"></div>' +
+        '<div class="skeleton skeleton-text short"></div>' +
+        '</div>';
 }
 
 function renderError(msg) {
