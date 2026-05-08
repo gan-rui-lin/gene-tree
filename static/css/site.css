@@ -230,25 +230,39 @@ h3, h4, h5 {
 .tree-container ul {
     list-style: none;
     margin: 0;
-    padding-left: 1.5rem;
-    border-left: 2px solid var(--color-border);
+    padding-left: 2rem;
+    position: relative;
 }
 
 .tree-container > ul {
-    border-left: none;
     padding-left: 0;
 }
 
+.tree-container > ul::before {
+    display: none;
+}
+
+.tree-container ul::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0.5rem;
+    left: 0.75rem;
+    width: 2px;
+    background: var(--color-border);
+}
+
 .tree-container li {
-    margin: 0.4rem 0;
+    margin: 0.3rem 0;
     position: relative;
+    padding-left: 1.25rem;
 }
 
 .tree-container li::before {
     content: "";
     position: absolute;
-    top: 0.7rem;
-    left: -1.5rem;
+    top: 0.75rem;
+    left: 0;
     width: 1rem;
     height: 2px;
     background: var(--color-border);
@@ -258,6 +272,61 @@ h3, h4, h5 {
     display: none;
 }
 
+.tree-container > ul > li {
+    padding-left: 0;
+}
+
+/* Father branch styling */
+.tree-container .branch-father > ul::before {
+    background: var(--color-info);
+}
+
+.tree-container .branch-father > li::before {
+    background: var(--color-info);
+}
+
+.tree-container .branch-father .node-label {
+    background: var(--color-info-light);
+    border-color: rgba(69, 123, 157, 0.25);
+    color: var(--color-info);
+}
+
+/* Mother branch styling */
+.tree-container .branch-mother > ul::before {
+    background: #d63384;
+}
+
+.tree-container .branch-mother > li::before {
+    background: #d63384;
+}
+
+.tree-container .branch-mother .node-label {
+    background: #fce4ec;
+    border-color: rgba(214, 51, 132, 0.2);
+    color: #c2185b;
+}
+
+/* Branch labels */
+.branch-label {
+    display: inline-block;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.2rem;
+}
+
+.branch-label-father {
+    background: var(--color-info-light);
+    color: var(--color-info);
+}
+
+.branch-label-mother {
+    background: #fce4ec;
+    color: #c2185b;
+}
+
+/* Node label (default / descendant) */
 .node-label {
     display: inline-block;
     padding: 0.3rem 0.7rem;
@@ -268,10 +337,45 @@ h3, h4, h5 {
     font-weight: 500;
     color: var(--color-primary-dark);
     transition: background 0.2s;
+    cursor: default;
 }
 
 .node-label:hover {
     background: rgba(67, 97, 238, 0.15);
+}
+
+/* Collapsible node */
+.node-label.collapsible {
+    cursor: pointer;
+    user-select: none;
+}
+
+.node-label.collapsible::before {
+    content: "▼";
+    display: inline-block;
+    margin-right: 0.35rem;
+    font-size: 0.65rem;
+    transition: transform 0.2s;
+}
+
+.node-label.collapsible.collapsed::before {
+    transform: rotate(-90deg);
+}
+
+.tree-children {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.tree-children.hidden {
+    display: none;
+}
+
+/* Tree toolbar */
+.tree-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: var(--space-md);
 }
 
 /* ===== Result Pre ===== */

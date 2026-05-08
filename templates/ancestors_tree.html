@@ -18,6 +18,13 @@
     </div>
 </form>
 
+<div id="tree-toolbar" class="tree-toolbar" style="display:none;">
+    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAll(false)">全部折叠</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAll(true)">全部展开</button>
+    <span class="ms-2"><span class="branch-label branch-label-father">■ 父系</span></span>
+    <span><span class="branch-label branch-label-mother">■ 母系</span></span>
+</div>
+
 <div id="tree-container" class="tree-container"></div>
 
 <script>
@@ -25,33 +32,78 @@ const treeData = JSON.parse('{{ tree_json|escapejs }}');
 
 function createNodeElement(node) {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="node-label">${node.member_id} - ${node.name}</span>`;
     const hasFather = !!node.father;
     const hasMother = !!node.mother;
-    if (hasFather || hasMother) {
+    const hasParents = hasFather || hasMother;
+
+    const span = document.createElement('span');
+    span.className = 'node-label' + (hasParents ? ' collapsible' : '');
+    span.textContent = node.member_id + ' - ' + node.name;
+
+    if (hasParents) {
+        const childrenDiv = document.createElement('div');
+        childrenDiv.className = 'tree-children';
         const ul = document.createElement('ul');
+
         if (hasFather) {
             const fatherLi = document.createElement('li');
-            fatherLi.innerHTML = '<span class="text-muted small">父系</span>';
+            fatherLi.className = 'branch-father';
+            const label = document.createElement('span');
+            label.className = 'branch-label branch-label-father';
+            label.textContent = '父系';
+            fatherLi.appendChild(label);
+
             const fatherUl = document.createElement('ul');
             fatherUl.appendChild(createNodeElement(node.father));
             fatherLi.appendChild(fatherUl);
             ul.appendChild(fatherLi);
         }
+
         if (hasMother) {
             const motherLi = document.createElement('li');
-            motherLi.innerHTML = '<span class="text-muted small">母系</span>';
+            motherLi.className = 'branch-mother';
+            const label = document.createElement('span');
+            label.className = 'branch-label branch-label-mother';
+            label.textContent = '母系';
+            motherLi.appendChild(label);
+
             const motherUl = document.createElement('ul');
             motherUl.appendChild(createNodeElement(node.mother));
             motherLi.appendChild(motherUl);
             ul.appendChild(motherLi);
         }
-        li.appendChild(ul);
+
+        childrenDiv.appendChild(ul);
+
+        span.addEventListener('click', function() {
+            span.classList.toggle('collapsed');
+            childrenDiv.classList.toggle('hidden');
+        });
+
+        li.appendChild(span);
+        li.appendChild(childrenDiv);
+    } else {
+        li.appendChild(span);
     }
     return li;
 }
 
+function toggleAll(expand) {
+    document.querySelectorAll('.node-label.collapsible').forEach(function(el) {
+        const childrenDiv = el.nextElementSibling;
+        if (!childrenDiv) return;
+        if (expand) {
+            el.classList.remove('collapsed');
+            childrenDiv.classList.remove('hidden');
+        } else {
+            el.classList.add('collapsed');
+            childrenDiv.classList.add('hidden');
+        }
+    });
+}
+
 if (treeData && treeData.member_id) {
+    document.getElementById('tree-toolbar').style.display = 'flex';
     const ul = document.createElement('ul');
     ul.appendChild(createNodeElement(treeData));
     document.getElementById('tree-container').appendChild(ul);
