@@ -2,7 +2,7 @@ import json
 from functools import wraps
 from urllib.parse import urlencode
 
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError
 from django.http import HttpResponseForbidden, JsonResponse
@@ -544,6 +544,11 @@ def login_page_view(request):
             return redirect("/members-page")
         return render(request, "login.html", {"error": "用户名或密码错误"})
     return render(request, "login.html")
+
+
+def logout_view(request):
+    logout(request)
+    return redirect("/login-page")
 
 
 @login_required

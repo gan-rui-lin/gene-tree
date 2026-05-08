@@ -12,6 +12,7 @@ urlpatterns = [
     path("ancestors-tree-page", views.ancestors_tree_page_view, name="ancestors-tree-page"),
     path("register", views.register_view, name="register"),
     path("login", views.login_view, name="login"),
+    path("logout", views.logout_view, name="logout"),
     path("genealogies", views.genealogies_view, name="genealogies"),
     path(
         "genealogies/<int:genealogy_id>/invite",
