@@ -149,7 +149,7 @@ function renderStatCard(label, value, sub) {
 function renderTable(items, columns) {
     if (!items || items.length === 0) return renderEmpty('暂无数据');
 
-    var html = '<div class="table-responsive"><table class="table table-striped table-bordered align-middle mb-0"><thead><tr>';
+    var html = '<div class="table-responsive"><table class="table table-striped table-bordered align-middle mb-0 table-card"><thead><tr>';
     columns.forEach(function(col) {
         html += '<th>' + col.label + '</th>';
     });
@@ -158,7 +158,7 @@ function renderTable(items, columns) {
         html += '<tr>';
         columns.forEach(function(col) {
             var val = item[col.key];
-            html += '<td>' + (val !== null && val !== undefined ? val : '-') + '</td>';
+            html += '<td data-label="' + col.label + '">' + (val !== null && val !== undefined ? val : '-') + '</td>';
         });
         html += '</tr>';
     });

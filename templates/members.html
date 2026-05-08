@@ -112,7 +112,7 @@
     {% endif %}
 
     <div class="table-responsive">
-        <table class="table table-striped table-bordered align-middle">
+        <table class="table table-striped table-bordered align-middle table-card">
             <thead>
             <tr>
                 <th>ID</th>
@@ -128,8 +128,8 @@
             {% for m in members %}
                 {% if can_write_selected %}
                 <tr>
-                    <td>{{ m.member_id }}</td>
-                    <td>
+                    <td data-label="ID">{{ m.member_id }}</td>
+                    <td data-label="姓名">
                         <input
                             name="name"
                             class="form-control form-control-sm"
@@ -138,7 +138,7 @@
                             required
                         >
                     </td>
-                    <td>
+                    <td data-label="性别">
                         <select
                             name="gender"
                             class="form-select form-select-sm"
@@ -149,7 +149,7 @@
                             <option value="F" {% if m.gender == "F" %}selected{% endif %}>女</option>
                         </select>
                     </td>
-                    <td>
+                    <td data-label="出生年">
                         <input
                             name="birth_year"
                             class="form-control form-control-sm"
@@ -157,7 +157,7 @@
                             form="update-form-{{ m.member_id }}"
                         >
                     </td>
-                    <td>
+                    <td data-label="去世年">
                         <input
                             name="death_year"
                             class="form-control form-control-sm"
@@ -165,7 +165,7 @@
                             form="update-form-{{ m.member_id }}"
                         >
                     </td>
-                    <td>
+                    <td data-label="简介">
                         <input
                             name="biography"
                             class="form-control form-control-sm"
@@ -173,7 +173,7 @@
                             form="update-form-{{ m.member_id }}"
                         >
                     </td>
-                    <td>
+                    <td data-label="操作">
                         <div class="d-flex gap-1 justify-content-center">
                             <form method="post" id="update-form-{{ m.member_id }}">
                                 {% csrf_token %}
@@ -189,13 +189,13 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td>{{ m.member_id }}</td>
-                    <td>{{ m.name }}</td>
-                    <td>{{ m.gender }}</td>
-                    <td>{{ m.birth_year|default_if_none:"" }}</td>
-                    <td>{{ m.death_year|default_if_none:"" }}</td>
-                    <td>{{ m.biography }}</td>
-                    <td class="text-center">只读</td>
+                    <td data-label="ID">{{ m.member_id }}</td>
+                    <td data-label="姓名">{{ m.name }}</td>
+                    <td data-label="性别">{{ m.gender }}</td>
+                    <td data-label="出生年">{{ m.birth_year|default_if_none:"" }}</td>
+                    <td data-label="去世年">{{ m.death_year|default_if_none:"" }}</td>
+                    <td data-label="简介">{{ m.biography }}</td>
+                    <td data-label="操作" class="text-center">只读</td>
                 </tr>
                 {% endif %}
             {% empty %}
