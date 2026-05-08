@@ -32,66 +32,43 @@ python scripts/generate_family_csv.py --out-dir sql/generated/small \
 
 ## 导入 MySQL
 
-### 方式一：使用 init.sql（推荐）
-
-先用 `python manage.py migrate` 创建 Django 系统表，然后：
+### 前置条件
 
 ```bash
-mysql -u root < sql/init.sql
+# 1. 先用 Django 创建系统表
+python manage.py migrate
+
+# 2. 导入基础测试数据（用户 + 族谱1 + 成员）
+mysql -u root -p gene_tree < sql/init.sql
 ```
 
-### 方式二：手动导入生成的数据
+此时数据库中已有：user 1(demo_admin)、user 2(demo_editor)、genealogy 1。
+
+### 导入生成的三个族谱数据
 
 ```bash
-# 1. 创建数据库和表结构
-mysql -u root < sql/schema.sql
-
-# 2. 创建测试用户和族谱（必须，因为 member 有外键到 genealogy）
-mysql -u root gene_tree -e "
-INSERT INTO user (user_id, password, username, email, is_superuser, is_staff, is_active, date_joined, first_name, last_name)
-VALUES (1, '!', 'demo_admin', 'admin@test.com', 0, 0, 1, NOW(), '', ''),
-       (2, '!', 'demo_editor', 'editor@test.com', 0, 0, 1, NOW(), '', '');
-
-INSERT INTO genealogy (genealogy_id, title, surname, created_at, created_by_id)
-VALUES (1, '张氏族谱（小）', '张', NOW(), 1),
-       (2, '李氏族谱（中）', '李', NOW(), 1),
-       (3, '王氏族谱（大）', '王', NOW(), 1);
-
-INSERT INTO genealogy_user (user_id, genealogy_id, role)
-VALUES (1, 1, 'owner'), (1, 2, 'owner'), (1, 3, 'owner'),
-       (2, 1, 'editor'), (2, 2, 'editor');
-"
-
-# 3. 导入数据（按顺序：member → parent_child → marriage）
-# Windows 下使用绝对路径，注意 secure_file_priv 设置
-mysql -u root gene_tree -e "
-SET FOREIGN_KEY_CHECKS=0;
-LOAD DATA INFILE 'C:/path/to/sql/generated/small/member.csv'
-INTO TABLE member FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
-LINES TERMINATED BY '\n' IGNORE 1 ROWS;
-LOAD DATA INFILE 'C:/path/to/sql/generated/small/parent_child.csv'
-INTO TABLE parent_child FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
-LINES TERMINATED BY '\n' IGNORE 1 ROWS;
-LOAD DATA INFILE 'C:/path/to/sql/generated/small/marriage.csv'
-INTO TABLE marriage FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
-LINES TERMINATED BY '\n' IGNORE 1 ROWS;
-SET FOREIGN_KEY_CHECKS=1;
-"
+# 一条命令导入全部三个数据集（需从项目根目录执行）
+mysql -u root -p --local-infile=1 gene_tree < sql/import_generated.sql
 ```
 
-> **注意**：如需同时导入三个数据集，依次替换路径中的 `small` 为 `medium`、`large` 即可。
+`import_generated.sql` 会自动完成：
+1. 创建 genealogy 2（李氏中型族谱）和 genealogy 3（王氏大型族谱）
+2. 将 demo_admin 绑定为三个族谱的 owner
+3. 按 member → parent_child → marriage 顺序导入三个数据集
+4. 最后输出验证统计
 
-### 方式三：PowerShell 一键导入脚本
+导入后预期：
+| genealogy_id | 姓氏 | 成员数 | 婚姻数 |
+|---|---|---|---|
+| 1 (small) | 江 | 500 | 154 |
+| 2 (medium) | 朱 | 5,000 | 1,817 |
+| 3 (large) | 伍 | 50,000 | 14,475 |
 
-```powershell
-# 导入单个数据集
-$base = "D:\VS77\Course\DB\exp\gene-tree\sql\generated\small"
-mysql -u root gene_tree -e "SET FOREIGN_KEY_CHECKS=0;"
-Get-Content "$base\member.csv" | mysql -u root gene_tree -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE member FIELDS TERMINATED BY ',' ENCLOSED BY '`"' LINES TERMINATED BY '\n' IGNORE 1 ROWS;"
-Get-Content "$base\parent_child.csv" | mysql -u root gene_tree -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE parent_child FIELDS TERMINATED BY ',' ENCLOSED BY '`"' LINES TERMINATED BY '\n' IGNORE 1 ROWS;"
-Get-Content "$base\marriage.csv" | mysql -u root gene_tree -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE marriage FIELDS TERMINATED BY ',' ENCLOSED BY '`"' LINES TERMINATED BY '\n' IGNORE 1 ROWS;"
-mysql -u root gene_tree -e "SET FOREIGN_KEY_CHECKS=1;"
-```
+### 常见问题
+
+- **`--local-infile=1` 必须加**：CSV 文件不在 MySQL 服务端目录，需用 `LOCAL INFILE` 从客户端读取
+- **必须从项目根目录执行**：SQL 中用的是相对路径 `sql/generated/...`
+- **如报错 `The used command is not allowed`**：MySQL 需开启 `local_infile`，执行 `SET GLOBAL local_infile = 1;`
 
 ## 参数说明
 
