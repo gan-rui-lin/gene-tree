@@ -19,7 +19,7 @@
 ```bash
 conda create -n gene-tree python=3.11 -y
 conda activate gene-tree
-pip install -r requirementlist.txt
+pip install -r requirement.txt
 ```
 
 ### 2. 准备 `.env`
