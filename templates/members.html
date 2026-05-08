@@ -4,12 +4,7 @@
     <h3 class="mb-0 page-heading">成员管理</h3>
 </div>
 
-{% if status_message %}
-    <div class="alert alert-success">{{ status_message }}</div>
-{% endif %}
-{% if error %}
-    <div class="alert alert-warning">{{ error }}</div>
-{% endif %}
+{# status/error messages now shown via toast (app.js) #}
 
 <div class="card mb-4">
     <div class="card-body">

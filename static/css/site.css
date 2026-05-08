@@ -317,3 +317,24 @@ main.container {
     padding-top: var(--space-xl);
     padding-bottom: var(--space-xl);
 }
+
+/* ===== Form Validation ===== */
+.form-control.is-valid,
+.form-select.is-valid {
+    border-color: var(--color-success);
+    box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.12);
+}
+
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.12);
+}
+
+/* ===== Toast Overrides ===== */
+.toast {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+}
