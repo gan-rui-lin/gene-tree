@@ -46,6 +46,32 @@
     --line-height: 1.6;
 }
 
+/* ===== Dark Mode Tokens ===== */
+[data-theme="dark"] {
+    --color-primary: #6c8cff;
+    --color-primary-light: #1e2a4a;
+    --color-primary-dark: #8da8ff;
+    --color-success: #3dd9c9;
+    --color-success-light: #1a3a36;
+    --color-danger: #ff6b7a;
+    --color-danger-light: #3a1a1e;
+    --color-warning: #ffb34d;
+    --color-warning-light: #3a2e1a;
+    --color-info: #6db3d4;
+    --color-info-light: #1a2e3a;
+
+    --color-bg: #111827;
+    --color-surface: #1f2937;
+    --color-text: #e5e7eb;
+    --color-text-secondary: #9ca3af;
+    --color-border: #374151;
+    --color-navbar-bg: #0f172a;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
 /* ===== Global Reset ===== */
 body {
     font-family: var(--font-family);
@@ -654,4 +680,131 @@ main.container {
     .tree-toolbar {
         flex-wrap: wrap;
     }
+}
+
+/* ===== Dark Mode Component Overrides ===== */
+[data-theme="dark"] body {
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .card {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background-color: var(--color-bg);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .table {
+    --bs-table-bg: var(--color-surface);
+    --bs-table-striped-bg: var(--color-bg);
+    color: var(--color-text);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .table thead th {
+    background: var(--color-primary-light);
+    color: var(--color-text);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .modal-content {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .modal-header {
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .modal-footer {
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+[data-theme="dark"] .text-muted {
+    color: var(--color-text-secondary) !important;
+}
+
+[data-theme="dark"] .bg-light {
+    background-color: var(--color-bg) !important;
+}
+
+[data-theme="dark"] .pre.bg-light {
+    background-color: var(--color-bg) !important;
+    border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] .node-label {
+    background: var(--color-primary-light);
+    border-color: rgba(108, 140, 255, 0.25);
+    color: var(--color-primary-dark);
+}
+
+[data-theme="dark"] .branch-father .node-label,
+[data-theme="dark"] .branch-label-father {
+    background: var(--color-info-light);
+    color: var(--color-info);
+}
+
+[data-theme="dark"] .branch-mother .node-label,
+[data-theme="dark"] .branch-label-mother {
+    background: #3a1a2e;
+    color: #ff8fab;
+}
+
+[data-theme="dark"] .branch-mother > ul::before,
+[data-theme="dark"] .branch-mother > li::before {
+    background: #ff8fab;
+}
+
+[data-theme="dark"] .toast {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .pie-center {
+    background: var(--color-surface);
+}
+
+[data-theme="dark"] .trend-bar {
+    background: linear-gradient(to top, var(--color-primary), rgba(108, 140, 255, 0.4));
+}
+
+[data-theme="dark"] .table.table-card tr {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1;
+}
+
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
 }

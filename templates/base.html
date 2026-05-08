@@ -20,6 +20,7 @@
             <a class="nav-link {% if request.path == '/ancestors-tree-page' %}active{% endif %}" href="/ancestors-tree-page">祖先树</a>
         </div>
         <div class="ms-auto d-flex align-items-center gap-2">
+            <button class="theme-toggle" onclick="toggleTheme()" title="切换深色/浅色模式">🌓</button>
             {% if request.user.is_authenticated %}
                 <span class="text-white small">当前用户：{{ request.user.username }}</span>
                 <a href="/logout" class="btn btn-outline-light btn-sm">退出登录</a>
