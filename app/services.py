@@ -2,9 +2,10 @@ from collections import defaultdict, deque
 from html import escape as html_escape
 
 from django.db import connection
+from django.db import transaction
 from django.utils import timezone
 
-from .models import Marriage, Member, ParentChild
+from .models import Marriage, Member, MemberGenerationCache, ParentChild
 
 
 def fetch_ancestors(member_id):
@@ -796,9 +797,21 @@ def fetch_spouse_and_children(member_id):
             m.birth_year,
             m.death_year
         FROM marriage ma
-        JOIN member m
-            ON (ma.spouse1_id = %s AND m.member_id = ma.spouse2_id)
-            OR (ma.spouse2_id = %s AND m.member_id = ma.spouse1_id)
+        JOIN member m ON m.member_id = ma.spouse2_id
+        WHERE ma.spouse1_id = %s
+
+        UNION ALL
+
+        SELECT
+            'spouse' AS relation,
+            m.member_id,
+            m.name,
+            m.gender,
+            m.birth_year,
+            m.death_year
+        FROM marriage ma
+        JOIN member m ON m.member_id = ma.spouse1_id
+        WHERE ma.spouse2_id = %s
 
         UNION ALL
 
@@ -821,40 +834,90 @@ def fetch_spouse_and_children(member_id):
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
+def _build_generation_map(genealogy_id):
+    member_ids = list(
+        Member.objects.filter(genealogy_id=genealogy_id).values_list("member_id", flat=True)
+    )
+    if not member_ids:
+        return {}
+
+    children_map = defaultdict(list)
+    gen_map = {}
+    for member_id in member_ids:
+        gen_map[member_id] = None
+
+    edge_rows = ParentChild.objects.filter(
+        parent__genealogy_id=genealogy_id,
+        child__genealogy_id=genealogy_id,
+    ).values_list("parent_id", "child_id")
+    indegree = defaultdict(int)
+    for parent_id, child_id in edge_rows:
+        children_map[parent_id].append(child_id)
+        indegree[child_id] += 1
+
+    roots = [member_id for member_id in member_ids if indegree.get(member_id, 0) == 0]
+    if not roots:
+        roots = sorted(member_ids)[:1]
+
+    queue = deque(sorted(roots))
+    for root_id in roots:
+        gen_map[root_id] = 1
+
+    while queue:
+        current = queue.popleft()
+        current_gen = gen_map.get(current)
+        if current_gen is None:
+            continue
+        for child_id in children_map.get(current, []):
+            next_gen = current_gen + 1
+            prev_gen = gen_map.get(child_id)
+            if prev_gen is None or next_gen < prev_gen:
+                gen_map[child_id] = next_gen
+                queue.append(child_id)
+
+    fallback = max([g for g in gen_map.values() if g is not None], default=1) + 1
+    for member_id in member_ids:
+        if gen_map[member_id] is None:
+            gen_map[member_id] = fallback
+
+    return gen_map
+
+
+def _refresh_generation_cache(genealogy_id):
+    gen_map = _build_generation_map(genealogy_id)
+    rows = [
+        MemberGenerationCache(
+            member_id=member_id,
+            genealogy_id=genealogy_id,
+            generation=generation,
+        )
+        for member_id, generation in gen_map.items()
+    ]
+    with transaction.atomic():
+        MemberGenerationCache.objects.filter(genealogy_id=genealogy_id).delete()
+        if rows:
+            MemberGenerationCache.objects.bulk_create(rows, batch_size=5000)
+
+
+def _ensure_generation_cache(genealogy_id):
+    member_count = Member.objects.filter(genealogy_id=genealogy_id).count()
+    cache_count = MemberGenerationCache.objects.filter(genealogy_id=genealogy_id).count()
+    if member_count != cache_count:
+        _refresh_generation_cache(genealogy_id)
+
+
 def fetch_longest_lifespan_generation(genealogy_id):
+    _ensure_generation_cache(genealogy_id)
     sql = """
-    WITH RECURSIVE generation_tree AS (
+    WITH generation_lifespan AS (
         SELECT
-            m.member_id,
-            1 AS generation
-        FROM member m
-        LEFT JOIN parent_child pc ON pc.child_id = m.member_id
-        WHERE m.genealogy_id = %s
-          AND pc.child_id IS NULL
-
-        UNION ALL
-
-        SELECT
-            pc.child_id AS member_id,
-            gt.generation + 1 AS generation
-        FROM generation_tree gt
-        JOIN parent_child pc ON pc.parent_id = gt.member_id
-        JOIN member c ON c.member_id = pc.child_id
-        WHERE c.genealogy_id = %s
-    ),
-    member_generation AS (
-        SELECT member_id, MIN(generation) AS generation
-        FROM generation_tree
-        GROUP BY member_id
-    ),
-    generation_lifespan AS (
-        SELECT
-            mg.generation,
+            mgc.generation,
             AVG(COALESCE(m.death_year, YEAR(CURDATE())) - m.birth_year) AS avg_lifespan
-        FROM member_generation mg
-        JOIN member m ON m.member_id = mg.member_id
-        WHERE m.birth_year IS NOT NULL
-        GROUP BY mg.generation
+        FROM member_generation_cache mgc
+        JOIN member m ON m.member_id = mgc.member_id
+        WHERE mgc.genealogy_id = %s
+          AND m.birth_year IS NOT NULL
+        GROUP BY mgc.generation
     )
     SELECT generation, avg_lifespan
     FROM generation_lifespan
@@ -862,7 +925,7 @@ def fetch_longest_lifespan_generation(genealogy_id):
     LIMIT 1;
     """
     with connection.cursor() as cursor:
-        cursor.execute(sql, [genealogy_id, genealogy_id])
+        cursor.execute(sql, [genealogy_id])
         row = cursor.fetchone()
         if not row:
             return {}
@@ -871,6 +934,11 @@ def fetch_longest_lifespan_generation(genealogy_id):
 
 def fetch_unmarried_male_over_50(genealogy_id):
     sql = """
+    WITH married AS (
+        SELECT spouse1_id AS member_id FROM marriage
+        UNION
+        SELECT spouse2_id AS member_id FROM marriage
+    )
     SELECT
         m.member_id,
         m.name,
@@ -878,14 +946,12 @@ def fetch_unmarried_male_over_50(genealogy_id):
         m.birth_year,
         (YEAR(CURDATE()) - m.birth_year) AS age
     FROM member m
-    LEFT JOIN marriage ma
-        ON m.member_id = ma.spouse1_id
-        OR m.member_id = ma.spouse2_id
+    LEFT JOIN married mr ON mr.member_id = m.member_id
     WHERE m.genealogy_id = %s
       AND m.gender = 'M'
       AND m.birth_year IS NOT NULL
       AND (YEAR(CURDATE()) - m.birth_year) > 50
-      AND ma.marriage_id IS NULL
+      AND mr.member_id IS NULL
     ORDER BY age DESC, m.member_id;
     """
     with connection.cursor() as cursor:
@@ -895,52 +961,32 @@ def fetch_unmarried_male_over_50(genealogy_id):
 
 
 def fetch_early_born_members(genealogy_id):
+    _ensure_generation_cache(genealogy_id)
     sql = """
-    WITH RECURSIVE generation_tree AS (
-        SELECT
-            m.member_id,
-            1 AS generation
-        FROM member m
-        LEFT JOIN parent_child pc ON pc.child_id = m.member_id
-        WHERE m.genealogy_id = %s
-          AND pc.child_id IS NULL
-
-        UNION ALL
-
-        SELECT
-            pc.child_id AS member_id,
-            gt.generation + 1 AS generation
-        FROM generation_tree gt
-        JOIN parent_child pc ON pc.parent_id = gt.member_id
-        JOIN member c ON c.member_id = pc.child_id
-        WHERE c.genealogy_id = %s
-    ),
-    member_generation AS (
-        SELECT member_id, MIN(generation) AS generation
-        FROM generation_tree
-        GROUP BY member_id
-    ),
+    WITH
     generation_avg_birth AS (
         SELECT
-            mg.generation,
+            mgc.generation,
             AVG(m.birth_year) AS avg_birth_year
-        FROM member_generation mg
-        JOIN member m ON m.member_id = mg.member_id
-        WHERE m.birth_year IS NOT NULL
-        GROUP BY mg.generation
+        FROM member_generation_cache mgc
+        JOIN member m ON m.member_id = mgc.member_id
+        WHERE mgc.genealogy_id = %s
+          AND m.birth_year IS NOT NULL
+        GROUP BY mgc.generation
     )
     SELECT
         m.member_id,
         m.name,
-        mg.generation,
+        mgc.generation,
         m.birth_year,
         gab.avg_birth_year
-    FROM member_generation mg
-    JOIN member m ON m.member_id = mg.member_id
-    JOIN generation_avg_birth gab ON gab.generation = mg.generation
-    WHERE m.birth_year IS NOT NULL
+    FROM member_generation_cache mgc
+    JOIN member m ON m.member_id = mgc.member_id
+    JOIN generation_avg_birth gab ON gab.generation = mgc.generation
+    WHERE mgc.genealogy_id = %s
+      AND m.birth_year IS NOT NULL
       AND m.birth_year < gab.avg_birth_year
-    ORDER BY mg.generation, m.birth_year, m.member_id;
+    ORDER BY mgc.generation, m.birth_year, m.member_id;
     """
     with connection.cursor() as cursor:
         cursor.execute(sql, [genealogy_id, genealogy_id])

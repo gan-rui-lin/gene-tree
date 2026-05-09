@@ -46,6 +46,7 @@ python manage.py migrate
 
 > 注意：`parent_child` 已按报告改为复合主键 `(parent_id, child_id)`。
 > 如果你之前已经按旧版本迁移过数据库（含 `parent_child_id`），建议重建数据库后重新 `migrate`，避免主键结构不一致。
+> 最新优化版本新增迁移 `app.0002_membergenerationcache`（表：`member_generation_cache`），拉取新代码后请务必再次执行 `python manage.py migrate`。
 
 ### 5. 导入测试数据
 
@@ -99,6 +100,12 @@ python manage.py runserver
 - `migrate`：执行迁移文件，把变更真正应用到 MySQL（建表/改表）。
 
 这样可以保证不同环境数据库结构一致，也方便后续升级和维护。
+
+## 性能优化后注意事项
+
+- 本项目已针对 `/analysis-page` 及部分统计查询做 SQL 优化，并引入 `member_generation_cache` 作为代际缓存表。
+- 首次访问“平均寿命最长代”和“每代最早出生成员”这两类分析时，系统可能会先构建缓存（首次稍慢，后续明显加快）。
+- 详细的命令记录、性能数据和优化思路见：[analysis_page_performance_2026-05-09.md](docs/analysis_page_performance_2026-05-09.md)。
 
 ---
 

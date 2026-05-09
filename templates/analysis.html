@@ -2,6 +2,31 @@
 {% block content %}
 <h3 class="page-heading">分析查询</h3>
 
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+<form class="row g-2 mb-3" method="get">
+    <div class="col-md-4">
+        <label class="form-label">当前成员范围族谱</label>
+        <select name="genealogy_id" class="form-select">
+            {% for g in genealogies %}
+                <option value="{{ g.genealogy_id }}" {% if g.genealogy_id == selected_genealogy_id %}selected{% endif %}>
+                    {{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-outline-primary w-100">切换</button>
+    </div>
+    {% if members_truncated %}
+    <div class="col-12">
+        <div class="form-text">当前仅预加载 {{ members|length }} / {{ members_total }} 名成员到下拉框；可在下方手动输入成员ID查询任意成员。</div>
+    </div>
+    {% endif %}
+</form>
+
 <div class="row g-3">
     {# Q1 配偶及子女 #}
     <div class="col-12">
@@ -15,6 +40,9 @@
                                 <option value="{{ m.member_id }}">{{ m.member_id }} - {{ m.name }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input id="q1-member-manual" class="form-control" type="number" placeholder="或手动输入成员ID">
                     </div>
                     <div class="col-md-2">
                         <button class="btn btn-outline-primary w-100" onclick="runQ1()">查询</button>
@@ -34,7 +62,7 @@
                     <div class="col-md-6">
                         <select id="q3-genealogy" class="form-select">
                             {% for g in genealogies %}
-                                <option value="{{ g.genealogy_id }}">{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
+                                <option value="{{ g.genealogy_id }}" {% if g.genealogy_id == selected_genealogy_id %}selected{% endif %}>{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -56,7 +84,7 @@
                     <div class="col-md-6">
                         <select id="q4-genealogy" class="form-select">
                             {% for g in genealogies %}
-                                <option value="{{ g.genealogy_id }}">{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
+                                <option value="{{ g.genealogy_id }}" {% if g.genealogy_id == selected_genealogy_id %}selected{% endif %}>{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -78,7 +106,7 @@
                     <div class="col-md-6">
                         <select id="q5-genealogy" class="form-select">
                             {% for g in genealogies %}
-                                <option value="{{ g.genealogy_id }}">{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
+                                <option value="{{ g.genealogy_id }}" {% if g.genealogy_id == selected_genealogy_id %}selected{% endif %}>{{ g.genealogy_id }} - {{ g.title }}（{{ g.surname }}）</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -97,19 +125,25 @@
             <div class="card-body">
                 <h5 class="card-title">Q6 亲缘路径（SQL + BFS）</h5>
                 <div class="row g-2">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <select id="q6-id1" class="form-select">
                             {% for m in members %}
                                 <option value="{{ m.member_id }}">{{ m.member_id }} - {{ m.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <select id="q6-id2" class="form-select">
                             {% for m in members %}
                                 <option value="{{ m.member_id }}">{{ m.member_id }} - {{ m.name }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input id="q6-id1-manual" class="form-control" type="number" placeholder="ID1">
+                    </div>
+                    <div class="col-md-2">
+                        <input id="q6-id2-manual" class="form-control" type="number" placeholder="ID2">
                     </div>
                     <div class="col-md-2">
                         <button class="btn btn-outline-primary w-100" onclick="runQ6()">查询</button>
@@ -205,7 +239,8 @@ async function fetchAndRender(url, resultId, renderFn) {
 }
 
 function runQ1() {
-    var id = document.getElementById('q1-member').value;
+    var manual = document.getElementById('q1-member-manual').value.trim();
+    var id = manual || document.getElementById('q1-member').value;
     fetchAndRender('/analysis/spouse-children/' + id, 'q1-result', function(data) {
         var items = data.items || [];
         if (items.length === 0) return renderEmpty('该成员暂无配偶和子女记录');
@@ -265,8 +300,8 @@ function runQ5() {
 }
 
 function runQ6() {
-    var id1 = document.getElementById('q6-id1').value;
-    var id2 = document.getElementById('q6-id2').value;
+    var id1 = document.getElementById('q6-id1-manual').value.trim() || document.getElementById('q6-id1').value;
+    var id2 = document.getElementById('q6-id2-manual').value.trim() || document.getElementById('q6-id2').value;
     fetchAndRender('/relationship-sql?id1=' + id1 + '&id2=' + id2, 'q6-result', function(data) {
         var items = data.items || [];
         if (items.length === 0) return renderEmpty('未找到两人之间的亲缘路径');

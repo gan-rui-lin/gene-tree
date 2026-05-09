@@ -121,3 +121,26 @@ class Marriage(models.Model):
                 check=~Q(spouse1=models.F("spouse2")), name="chk_spouse_not_same"
             )
         ]
+
+
+class MemberGenerationCache(models.Model):
+    member = models.OneToOneField(
+        Member,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        db_column="member_id",
+        related_name="generation_cache",
+    )
+    genealogy = models.ForeignKey(
+        Genealogy,
+        on_delete=models.CASCADE,
+        related_name="generation_caches",
+    )
+    generation = models.PositiveIntegerField()
+    computed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "member_generation_cache"
+        indexes = [
+            models.Index(fields=["genealogy", "generation"], name="idx_mgc_genealogy_generation"),
+        ]

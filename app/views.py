@@ -989,19 +989,29 @@ def dashboard_page_view(request):
 @login_required
 @require_http_methods(["GET"])
 def analysis_page_view(request):
-    links = GenealogyUser.objects.filter(user=request.user).values_list(
-        "genealogy_id", flat=True
-    )
+    links = GenealogyUser.objects.filter(user=request.user).values_list("genealogy_id", flat=True)
     genealogy_ids = list(links)
-    genealogies = Genealogy.objects.filter(genealogy_id__in=genealogy_ids).order_by(
-        "genealogy_id"
-    )
-    members = Member.objects.filter(genealogy_id__in=genealogy_ids).order_by("member_id")
+    genealogies = Genealogy.objects.filter(genealogy_id__in=genealogy_ids).order_by("genealogy_id")
+    if not genealogy_ids:
+        return render(request, "analysis.html", {"genealogies": [], "members": [], "error": "当前用户还没有可访问的族谱"})
+
+    selected_genealogy_id = _to_int(request.GET.get("genealogy_id")) or genealogy_ids[0]
+    if selected_genealogy_id not in genealogy_ids:
+        return HttpResponseForbidden("无权限访问该族谱")
+
+    member_qs = Member.objects.filter(genealogy_id=selected_genealogy_id).order_by("member_id")
+    members_total = member_qs.count()
+    members = list(member_qs[:500])
+    members_truncated = members_total > len(members)
+
     return render(
         request,
         "analysis.html",
         {
             "genealogies": genealogies,
             "members": members,
+            "selected_genealogy_id": selected_genealogy_id,
+            "members_total": members_total,
+            "members_truncated": members_truncated,
         },
     )
