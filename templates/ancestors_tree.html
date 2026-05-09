@@ -2,7 +2,21 @@
 {% block content %}
 <h3 class="page-heading">树形展示（祖先结构）</h3>
 
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
 <form class="row g-2 mb-3" method="get">
+    <div class="col-md-4">
+        <label class="form-label">选择族谱</label>
+        <select name="genealogy_id" class="form-select">
+            {% for genealogy in genealogies %}
+                <option value="{{ genealogy.genealogy_id }}" {% if genealogy.genealogy_id == selected_genealogy_id %}selected{% endif %}>
+                    {{ genealogy.genealogy_id }} - {{ genealogy.title }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
     <div class="col-md-4">
         <label class="form-label">选择成员</label>
         <select name="member_id" class="form-select">

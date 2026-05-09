@@ -723,11 +723,26 @@ def members_page_view(request):
 @login_required
 @require_http_methods(["GET"])
 def tree_page_view(request):
-    links = GenealogyUser.objects.filter(user=request.user).values_list(
-        "genealogy_id", flat=True
-    )
-    members = Member.objects.filter(genealogy_id__in=links).order_by("member_id")
+    links = GenealogyUser.objects.filter(user=request.user).select_related("genealogy")
+    genealogies = [link.genealogy for link in links]
+    if not genealogies:
+        return render(request, "tree.html", {"error": "当前用户还没有可访问的族谱"})
+
+    accessible_ids = [g.genealogy_id for g in genealogies]
+    selected_genealogy_id = _to_int(request.GET.get("genealogy_id"))
     selected_member_id = _to_int(request.GET.get("member_id"))
+
+    if selected_genealogy_id is None and selected_member_id is not None:
+        selected_member = Member.objects.filter(member_id=selected_member_id).first()
+        if selected_member and selected_member.genealogy_id in accessible_ids:
+            selected_genealogy_id = selected_member.genealogy_id
+
+    if selected_genealogy_id is None:
+        selected_genealogy_id = accessible_ids[0]
+    if selected_genealogy_id not in accessible_ids:
+        return HttpResponseForbidden("无权限访问该族谱")
+
+    members = Member.objects.filter(genealogy_id=selected_genealogy_id).order_by("member_id")
     if selected_member_id is None and members:
         selected_member_id = members[0].member_id
 
@@ -738,6 +753,8 @@ def tree_page_view(request):
         request,
         "tree.html",
         {
+            "genealogies": genealogies,
+            "selected_genealogy_id": selected_genealogy_id,
             "members": members,
             "selected_member_id": selected_member_id,
             "tree_json": json.dumps(tree, ensure_ascii=False),
@@ -748,11 +765,26 @@ def tree_page_view(request):
 @login_required
 @require_http_methods(["GET"])
 def ancestors_tree_page_view(request):
-    links = GenealogyUser.objects.filter(user=request.user).values_list(
-        "genealogy_id", flat=True
-    )
-    members = Member.objects.filter(genealogy_id__in=links).order_by("member_id")
+    links = GenealogyUser.objects.filter(user=request.user).select_related("genealogy")
+    genealogies = [link.genealogy for link in links]
+    if not genealogies:
+        return render(request, "ancestors_tree.html", {"error": "当前用户还没有可访问的族谱"})
+
+    accessible_ids = [g.genealogy_id for g in genealogies]
+    selected_genealogy_id = _to_int(request.GET.get("genealogy_id"))
     selected_member_id = _to_int(request.GET.get("member_id"))
+
+    if selected_genealogy_id is None and selected_member_id is not None:
+        selected_member = Member.objects.filter(member_id=selected_member_id).first()
+        if selected_member and selected_member.genealogy_id in accessible_ids:
+            selected_genealogy_id = selected_member.genealogy_id
+
+    if selected_genealogy_id is None:
+        selected_genealogy_id = accessible_ids[0]
+    if selected_genealogy_id not in accessible_ids:
+        return HttpResponseForbidden("无权限访问该族谱")
+
+    members = Member.objects.filter(genealogy_id=selected_genealogy_id).order_by("member_id")
     if selected_member_id is None and members:
         selected_member_id = members[0].member_id
 
@@ -763,6 +795,8 @@ def ancestors_tree_page_view(request):
         request,
         "ancestors_tree.html",
         {
+            "genealogies": genealogies,
+            "selected_genealogy_id": selected_genealogy_id,
             "members": members,
             "selected_member_id": selected_member_id,
             "tree_json": json.dumps(tree, ensure_ascii=False),
