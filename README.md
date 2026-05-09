@@ -57,7 +57,7 @@ mysql -u root -p gene_tree < sql/init.sql
 
 **方式二：导入生成的族谱数据（推荐，含三个规模数据集）**
 
-先生成 CSV 数据，再一键导入：
+先生成 CSV 数据（也可以不执行 `python scripts/generate_all.py`，而是直接拷贝 `sql\example` 目录到 `sql/generated` 下），再一键导入：
 
 ```bash
 # 生成 small(~500人) / medium(~5000人) / large(~50000人) 三个数据集
