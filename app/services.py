@@ -1,4 +1,5 @@
 from collections import defaultdict, deque
+from html import escape as html_escape
 
 from django.db import connection
 from django.utils import timezone
@@ -206,6 +207,435 @@ def export_genealogy_tree(genealogy_id):
         "nodes": nodes,
         "marriages": marriages,
     }
+
+
+def _dot_escape(value):
+    text = str(value or "")
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _build_tree_layout(payload):
+    nodes = payload.get("nodes", [])
+    if not nodes:
+        return {}, {}, 180, 60, 160, 42
+
+    node_ids = sorted(node["member_id"] for node in nodes)
+    edges = []
+    children_map = defaultdict(list)
+    indegree = {member_id: 0 for member_id in node_ids}
+
+    for node in nodes:
+        parent_id = node["member_id"]
+        for child in node.get("children", []):
+            child_id = child.get("child_id")
+            if child_id not in indegree:
+                continue
+            relation_type = (child.get("relation_type") or "").strip().lower()
+            edges.append((parent_id, child_id, relation_type))
+            children_map[parent_id].append((child_id, relation_type))
+            indegree[child_id] += 1
+
+    roots = payload.get("roots") or sorted(
+        [member_id for member_id, degree in indegree.items() if degree == 0]
+    )
+    if not roots:
+        roots = [node_ids[0]]
+
+    queue = deque(sorted(roots))
+    level_map = {member_id: 0 for member_id in roots}
+    indegree_work = indegree.copy()
+
+    while queue:
+        current = queue.popleft()
+        for child_id, _relation_type in children_map.get(current, []):
+            level_map[child_id] = max(level_map.get(child_id, 0), level_map[current] + 1)
+            indegree_work[child_id] -= 1
+            if indegree_work[child_id] == 0:
+                queue.append(child_id)
+
+    unresolved = [member_id for member_id in node_ids if member_id not in level_map]
+    fallback_level = max(level_map.values(), default=-1) + 1
+    for idx, member_id in enumerate(unresolved):
+        level_map[member_id] = fallback_level + idx
+
+    level_nodes = defaultdict(list)
+    for member_id, level in level_map.items():
+        level_nodes[level].append(member_id)
+    for level in level_nodes:
+        level_nodes[level].sort()
+
+    node_width = 160
+    node_height = 42
+    x_gap = 42
+    y_gap = 84
+    margin_x = 24
+    margin_y = 24
+
+    max_per_level = max((len(items) for items in level_nodes.values()), default=1)
+    total_width = margin_x * 2 + max_per_level * node_width + max(0, max_per_level - 1) * x_gap
+    max_level = max(level_nodes.keys(), default=0)
+    total_height = margin_y * 2 + (max_level + 1) * node_height + max_level * y_gap
+
+    positions = {}
+    for level in sorted(level_nodes.keys()):
+        items = level_nodes[level]
+        count = len(items)
+        row_width = count * node_width + max(0, count - 1) * x_gap
+        start_x = (total_width - row_width) / 2
+        y = margin_y + level * (node_height + y_gap)
+        for idx, member_id in enumerate(items):
+            x = start_x + idx * (node_width + x_gap)
+            positions[member_id] = (x, y)
+
+    return positions, edges, total_width, total_height, node_width, node_height
+
+
+def export_genealogy_tree_dot(genealogy_id):
+    payload = export_genealogy_tree(genealogy_id)
+    lines = [
+        f"digraph genealogy_{genealogy_id} {{",
+        '  graph [rankdir=TB, splines=ortho, nodesep=0.35, ranksep=0.65, pad="0.15"];',
+        '  node [shape=box, style="rounded,filled", fillcolor="#eef1ff", color="#8ea0ff",',
+        '        fontname="Microsoft YaHei", fontsize=10, penwidth=1.1];',
+        '  edge [color="#9aa4b2", arrowsize=0.7, penwidth=1.0];',
+    ]
+
+    for node in payload["nodes"]:
+        member_id = node["member_id"]
+        name = _dot_escape(node["name"])
+        lines.append(f'  n_{member_id} [label="{member_id} - {name}"];')
+
+    for node in payload["nodes"]:
+        parent_id = node["member_id"]
+        for child in node.get("children", []):
+            child_id = child["child_id"]
+            relation_type = (child.get("relation_type") or "").strip().lower()
+            if relation_type == "father":
+                color = "#457b9d"
+            elif relation_type == "mother":
+                color = "#d63384"
+            else:
+                color = "#9aa4b2"
+            lines.append(f'  n_{parent_id} -> n_{child_id} [color="{color}"];')
+
+    for row in payload.get("marriages", []):
+        spouse1_id = row["spouse1_id"]
+        spouse2_id = row["spouse2_id"]
+        lines.append(
+            f'  n_{spouse1_id} -> n_{spouse2_id} [dir=none, style=dashed, color="#f4a261", constraint=false];'
+        )
+
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _format_year_range(node):
+    birth = node.get("birth_year")
+    death = node.get("death_year")
+    left = str(birth) if birth is not None else ""
+    right = str(death) if death is not None else ""
+    if not left and not right:
+        return "-"
+    return f"{left}-{right}"
+
+
+def _build_family_units(payload):
+    node_map = {node["member_id"]: node for node in payload.get("nodes", [])}
+    marriages = sorted(payload.get("marriages", []), key=lambda row: row.get("marriage_id", 0))
+
+    spouse_marriages = defaultdict(list)
+    for row in marriages:
+        spouse_marriages[row["spouse1_id"]].append(row)
+        spouse_marriages[row["spouse2_id"]].append(row)
+
+    primary_marriage_by_member = {}
+    for member_id, rows in spouse_marriages.items():
+        if rows:
+            primary_marriage_by_member[member_id] = rows[0]
+
+    units = []
+    member_to_unit = {}
+    used_members = set()
+
+    for row in marriages:
+        spouse1_id = row["spouse1_id"]
+        spouse2_id = row["spouse2_id"]
+        if spouse1_id not in node_map or spouse2_id not in node_map:
+            continue
+        if (
+            primary_marriage_by_member.get(spouse1_id) != row
+            or primary_marriage_by_member.get(spouse2_id) != row
+        ):
+            continue
+
+        unit_id = f"u_m_{row['marriage_id']}"
+        members = [spouse1_id, spouse2_id]
+        units.append({"unit_id": unit_id, "members": members, "kind": "couple"})
+        member_to_unit[spouse1_id] = unit_id
+        member_to_unit[spouse2_id] = unit_id
+        used_members.update(members)
+
+    for member_id in sorted(node_map.keys()):
+        if member_id in used_members:
+            continue
+        unit_id = f"u_s_{member_id}"
+        units.append({"unit_id": unit_id, "members": [member_id], "kind": "single"})
+        member_to_unit[member_id] = unit_id
+
+    parent_edges = set()
+    for node in node_map.values():
+        child_id = node["member_id"]
+        target_unit = member_to_unit.get(child_id)
+        if not target_unit:
+            continue
+
+        father_ids = [
+            p["parent_id"]
+            for p in node.get("parents", [])
+            if (p.get("relation_type") or "").strip().lower() == "father"
+        ]
+        mother_ids = [
+            p["parent_id"]
+            for p in node.get("parents", [])
+            if (p.get("relation_type") or "").strip().lower() == "mother"
+        ]
+        source_unit = None
+        if father_ids:
+            source_unit = member_to_unit.get(father_ids[0])
+        if not source_unit and mother_ids:
+            source_unit = member_to_unit.get(mother_ids[0])
+
+        if source_unit and source_unit != target_unit:
+            parent_edges.add((source_unit, target_unit))
+
+    units_by_id = {unit["unit_id"]: unit for unit in units}
+    return units, units_by_id, member_to_unit, sorted(parent_edges), node_map
+
+
+def _layout_family_units(units, parent_edges):
+    children_map = defaultdict(list)
+    indegree = {unit["unit_id"]: 0 for unit in units}
+
+    for source_id, target_id in parent_edges:
+        if source_id not in indegree or target_id not in indegree:
+            continue
+        children_map[source_id].append(target_id)
+        indegree[target_id] += 1
+
+    roots = sorted([unit_id for unit_id, degree in indegree.items() if degree == 0])
+    if not roots and units:
+        roots = [sorted(indegree.keys())[0]]
+
+    queue = deque(roots)
+    level_map = {unit_id: 0 for unit_id in roots}
+    indegree_work = indegree.copy()
+    while queue:
+        current = queue.popleft()
+        for child_id in children_map.get(current, []):
+            level_map[child_id] = max(level_map.get(child_id, 0), level_map[current] + 1)
+            indegree_work[child_id] -= 1
+            if indegree_work[child_id] == 0:
+                queue.append(child_id)
+
+    unresolved = [unit_id for unit_id in indegree.keys() if unit_id not in level_map]
+    fallback_level = max(level_map.values(), default=-1) + 1
+    for idx, unit_id in enumerate(sorted(unresolved)):
+        level_map[unit_id] = fallback_level + idx
+
+    level_units = defaultdict(list)
+    for unit in units:
+        unit_id = unit["unit_id"]
+        level_units[level_map.get(unit_id, 0)].append(unit_id)
+
+    for level in level_units:
+        level_units[level].sort(
+            key=lambda unit_id: (
+                0 if unit_id.startswith("u_s_") else 1,
+                int(unit_id.split("_")[-1]) if unit_id.split("_")[-1].isdigit() else 0,
+            )
+        )
+
+    node_width = 220
+    node_height = 78
+    x_gap = 42
+    y_gap = 86
+    margin_x = 32
+    margin_y = 56
+
+    max_per_level = max((len(items) for items in level_units.values()), default=1)
+    total_width = margin_x * 2 + max_per_level * node_width + max(0, max_per_level - 1) * x_gap
+    max_level = max(level_units.keys(), default=0)
+    total_height = margin_y * 2 + (max_level + 1) * node_height + max_level * y_gap + 40
+
+    positions = {}
+    for level in sorted(level_units.keys()):
+        items = level_units[level]
+        count = len(items)
+        row_width = count * node_width + max(0, count - 1) * x_gap
+        start_x = (total_width - row_width) / 2
+        y = margin_y + level * (node_height + y_gap)
+        for idx, unit_id in enumerate(items):
+            x = start_x + idx * (node_width + x_gap)
+            positions[unit_id] = (x, y)
+
+    return positions, total_width, total_height, node_width, node_height
+
+
+def export_genealogy_tree_svg(genealogy_id):
+    payload = export_genealogy_tree(genealogy_id)
+    units, units_by_id, _member_to_unit, parent_edges, node_map = _build_family_units(payload)
+    positions, width, height, node_width, node_height = _layout_family_units(units, parent_edges)
+
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{int(width)}" height="{int(height)}" viewBox="0 0 {int(width)} {int(height)}">',
+        "  <defs>",
+        "    <style>",
+        "      .card { fill: #f5fbf7; stroke: #2da36b; stroke-width: 1.2; }",
+        "      .card-head { fill: #3aa66d; }",
+        "      .name { font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif; font-size: 13px; font-weight: 700; fill: #ffffff; }",
+        "      .years { font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif; font-size: 11px; fill: #1f3d2a; }",
+        "      .edge { fill: none; stroke: #2da36b; stroke-width: 1.7; }",
+        "      .legend-title { font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; fill: #2b2d42; }",
+        "      .legend-text { font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif; font-size: 11px; fill: #4a5568; }",
+        "    </style>",
+        "  </defs>",
+    ]
+
+    legend_x = width - 250
+    if legend_x < 20:
+        legend_x = 20
+    lines.extend(
+        [
+            f'  <rect x="{legend_x:.1f}" y="12" width="230" height="58" rx="8" ry="8" fill="#ffffff" stroke="#dfe5e2" />',
+            f'  <text class="legend-title" x="{legend_x + 10:.1f}" y="30">图例</text>',
+            f'  <line x1="{legend_x + 12:.1f}" y1="44" x2="{legend_x + 44:.1f}" y2="44" class="edge" />',
+            f'  <text class="legend-text" x="{legend_x + 52:.1f}" y="48">亲子关系连线</text>',
+            f'  <rect x="{legend_x + 12:.1f}" y="53" width="26" height="10" class="card-head" />',
+            f'  <text class="legend-text" x="{legend_x + 52:.1f}" y="62">家庭节点（夫妻同框）</text>',
+        ]
+    )
+
+    for source_id, target_id in parent_edges:
+        if source_id not in positions or target_id not in positions:
+            continue
+        px, py = positions[source_id]
+        cx, cy = positions[target_id]
+        x1 = px + node_width / 2
+        y1 = py + node_height
+        x2 = cx + node_width / 2
+        y2 = cy
+        c1y = y1 + (y2 - y1) * 0.42
+        c2y = y2 - (y2 - y1) * 0.42
+        lines.append(
+            f'  <path class="edge" d="M {x1:.1f} {y1:.1f} C {x1:.1f} {c1y:.1f}, {x2:.1f} {c2y:.1f}, {x2:.1f} {y2:.1f}" />'
+        )
+
+    for unit in units:
+        unit_id = unit["unit_id"]
+        if unit_id not in positions:
+            continue
+        x, y = positions[unit_id]
+        member_ids = unit["members"]
+        members = [node_map[mid] for mid in member_ids if mid in node_map]
+        if not members:
+            continue
+
+        names = "   ".join(member.get("name", "") for member in members)
+        years = "   ".join(_format_year_range(member) for member in members)
+        names = html_escape(names)
+        years = html_escape(years)
+
+        lines.append(f'  <rect class="card" x="{x:.1f}" y="{y:.1f}" width="{node_width}" height="{node_height}" rx="5" ry="5" />')
+        lines.append(
+            f'  <rect class="card-head" x="{x:.1f}" y="{y:.1f}" width="{node_width}" height="34" rx="5" ry="5" />'
+        )
+        lines.append(
+            f'  <rect x="{x:.1f}" y="{y + 29:.1f}" width="{node_width}" height="5" fill="#3aa66d" />'
+        )
+        lines.append(
+            f'  <text class="name" x="{x + node_width / 2:.1f}" y="{y + 22:.1f}" text-anchor="middle">{names}</text>'
+        )
+        lines.append(
+            f'  <text class="years" x="{x + node_width / 2:.1f}" y="{y + 56:.1f}" text-anchor="middle">{years}</text>'
+        )
+
+    lines.append("</svg>")
+    return "\n".join(lines) + "\n"
+
+
+def export_genealogy_tree_drawio(genealogy_id):
+    payload = export_genealogy_tree(genealogy_id)
+    positions, edges, width, height, node_width, node_height = _build_tree_layout(payload)
+    modified = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    lines = [
+        f'<mxfile host="app.diagrams.net" modified="{modified}" agent="gene-tree" version="24.7.17" type="device">',
+        f'  <diagram id="genealogy-{genealogy_id}" name="Genealogy {genealogy_id}">',
+        f'    <mxGraphModel dx="{int(width) + 80}" dy="{int(height) + 80}" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="{int(width) + 120}" pageHeight="{int(height) + 120}" math="0" shadow="0">',
+        "      <root>",
+        '        <mxCell id="0" />',
+        '        <mxCell id="1" parent="0" />',
+    ]
+
+    for node in payload.get("nodes", []):
+        member_id = node["member_id"]
+        x, y = positions.get(member_id, (24, 24))
+        label = html_escape(f'{member_id} - {node.get("name", "")}', quote=True)
+        lines.extend(
+            [
+                f'        <mxCell id="n_{member_id}" value="{label}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef1ff;strokeColor=#8ea0ff;fontColor=#2b2d42;" vertex="1" parent="1">',
+                f'          <mxGeometry x="{x:.1f}" y="{y:.1f}" width="{node_width}" height="{node_height}" as="geometry" />',
+                "        </mxCell>",
+            ]
+        )
+
+    edge_idx = 1
+    for parent_id, child_id, relation_type in edges:
+        color = "#9aa4b2"
+        if relation_type == "father":
+            color = "#457b9d"
+        elif relation_type == "mother":
+            color = "#d63384"
+        style = (
+            "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
+            f"html=1;strokeColor={color};endArrow=block;endFill=1;"
+        )
+        lines.extend(
+            [
+                f'        <mxCell id="e_{edge_idx}" style="{style}" edge="1" parent="1" source="n_{parent_id}" target="n_{child_id}">',
+                '          <mxGeometry relative="1" as="geometry" />',
+                "        </mxCell>",
+            ]
+        )
+        edge_idx += 1
+
+    for row in payload.get("marriages", []):
+        s1 = row["spouse1_id"]
+        s2 = row["spouse2_id"]
+        if s1 not in positions or s2 not in positions:
+            continue
+        style = (
+            "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
+            "html=1;strokeColor=#f4a261;dashed=1;endArrow=none;"
+        )
+        lines.extend(
+            [
+                f'        <mxCell id="e_{edge_idx}" style="{style}" edge="1" parent="1" source="n_{s1}" target="n_{s2}">',
+                '          <mxGeometry relative="1" as="geometry" />',
+                "        </mxCell>",
+            ]
+        )
+        edge_idx += 1
+
+    lines.extend(
+        [
+            "      </root>",
+            "    </mxGraphModel>",
+            "  </diagram>",
+            "</mxfile>",
+        ]
+    )
+    return "\n".join(lines) + "\n"
 
 
 def shortest_relationship_path(member_id_1, member_id_2):

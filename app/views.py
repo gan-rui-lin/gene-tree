@@ -21,6 +21,9 @@ from .services import (
     fetch_spouse_and_children,
     fetch_unmarried_male_over_50,
     export_genealogy_tree,
+    export_genealogy_tree_dot,
+    export_genealogy_tree_drawio,
+    export_genealogy_tree_svg,
     shortest_relationship_path,
     shortest_relationship_path_sql_bfs,
 )
@@ -899,10 +902,31 @@ def genealogy_tree_download_view(request):
     if genealogy_id not in accessible_ids:
         return HttpResponseForbidden("无权限访问该族谱")
 
-    payload = export_genealogy_tree(genealogy_id)
-    content = json.dumps(payload, ensure_ascii=False, indent=2)
-    filename = f"genealogy_{genealogy_id}_tree.json"
-    response = HttpResponse(content, content_type="application/json; charset=utf-8")
+    fmt = (request.GET.get("format") or "json").strip().lower()
+    if fmt == "dot":
+        content = export_genealogy_tree_dot(genealogy_id)
+        filename = f"genealogy_{genealogy_id}_tree.dot"
+        content_type = "text/vnd.graphviz; charset=utf-8"
+    elif fmt == "svg":
+        content = export_genealogy_tree_svg(genealogy_id)
+        filename = f"genealogy_{genealogy_id}_tree.svg"
+        content_type = "image/svg+xml; charset=utf-8"
+    elif fmt in {"drawio", "mxfile"}:
+        content = export_genealogy_tree_drawio(genealogy_id)
+        filename = f"genealogy_{genealogy_id}_tree.drawio"
+        content_type = "application/xml; charset=utf-8"
+    elif fmt == "json":
+        payload = export_genealogy_tree(genealogy_id)
+        content = json.dumps(payload, ensure_ascii=False, indent=2)
+        filename = f"genealogy_{genealogy_id}_tree.json"
+        content_type = "application/json; charset=utf-8"
+    else:
+        return JsonResponse(
+            {"error": "invalid_format", "supported_formats": ["json", "dot", "svg", "drawio"]},
+            status=400,
+        )
+
+    response = HttpResponse(content, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 

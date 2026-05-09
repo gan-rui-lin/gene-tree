@@ -32,10 +32,13 @@
         <div class="col-md-2 d-flex align-items-end">
             <button class="btn btn-outline-primary w-100">查看</button>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
-            <a class="btn btn-outline-success w-100" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}" download>
-                Download 完整树结构
-            </a>
+        <div class="col-md-6 d-flex align-items-end">
+            <div class="d-flex flex-wrap gap-2 w-100">
+                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=svg" download>Download SVG</a>
+                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=drawio" download>Download Draw.io</a>
+                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=dot" download>Download DOT</a>
+                <a class="btn btn-outline-secondary" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=json" download>Download JSON</a>
+            </div>
         </div>
     </form>
 
