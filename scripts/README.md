@@ -35,40 +35,41 @@ python scripts/generate_family_csv.py --out-dir sql/generated/small \
 ### 前置条件
 
 ```bash
-# 1. 先用 Django 创建系统表
 python manage.py migrate
-
-# 2. 导入基础测试数据（用户 + 族谱1 + 成员）
-mysql -u root -p gene_tree < sql/init.sql
+mysql -u root -p gene_tree < sql/init.sql   # 创建用户（仅首次需要）
 ```
 
-此时数据库中已有：user 1(demo_admin)、user 2(demo_editor)、genealogy 1。
-
-### 导入生成的三个族谱数据
+### 一键导入三个族谱数据
 
 ```bash
-# 一条命令导入全部三个数据集（需从项目根目录执行）
+# 1. 生成 CSV 数据
+python scripts/generate_all.py
+
+# 2. 开启 local_infile 并导入
+mysql -u root -p -e "SET GLOBAL local_infile = 1;"
 mysql -u root -p --local-infile=1 gene_tree < sql/import_generated.sql
 ```
 
-`import_generated.sql` 会自动完成：
-1. 创建 genealogy 2（李氏中型族谱）和 genealogy 3（王氏大型族谱）
-2. 将 demo_admin 绑定为三个族谱的 owner
-3. 按 member → parent_child → marriage 顺序导入三个数据集
-4. 最后输出验证统计
+`import_generated.sql` 会自动：
+1. 清空已有的 member / parent_child / marriage 数据（保留 user 表）
+2. 创建三个族谱记录（江氏/朱氏/伍氏）
+3. 绑定 demo_admin 为三个族谱的 owner
+4. 按 member → parent_child → marriage 顺序导入全部 CSV
+5. 输出验证统计
 
 导入后预期：
-| genealogy_id | 姓氏 | 成员数 | 婚姻数 |
-|---|---|---|---|
-| 1 (small) | 江 | 500 | 154 |
-| 2 (medium) | 朱 | 5,000 | 1,817 |
-| 3 (large) | 伍 | 50,000 | 14,475 |
+| genealogy_id | 族谱 | 姓氏 | 成员数 | 婚姻数 |
+|---|---|---|---|---|
+| 1 | 江氏小型族谱 | 江 | 500 | 154 |
+| 2 | 朱氏中型族谱 | 朱 | 5,000 | 1,817 |
+| 3 | 伍氏大型族谱 | 伍 | 50,000 | 14,475 |
 
 ### 常见问题
 
-- **`--local-infile=1` 必须加**：CSV 文件不在 MySQL 服务端目录，需用 `LOCAL INFILE` 从客户端读取
+- **`--local-infile=1` 必须加**：CSV 不在 MySQL 服务端目录，需用 `LOCAL INFILE` 从客户端读取
 - **必须从项目根目录执行**：SQL 中用的是相对路径 `sql/generated/...`
-- **如报错 `The used command is not allowed`**：MySQL 需开启 `local_infile`，执行 `SET GLOBAL local_infile = 1;`
+- **报错 `Loading local data is disabled`**：先执行 `SET GLOBAL local_infile = 1;`
+- **可重复执行**：脚本会先清空再导入，不会产生重复数据
 
 ## 参数说明
 

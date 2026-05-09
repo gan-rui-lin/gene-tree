@@ -48,14 +48,35 @@ python manage.py migrate
 > 如果你之前已经按旧版本迁移过数据库（含 `parent_child_id`），建议重建数据库后重新 `migrate`，避免主键结构不一致。
 
 ### 5. 导入测试数据
+
+**方式一：使用 init.sql（少量示例数据）**
+
 ```bash
 mysql -u root -p gene_tree < sql/init.sql
 ```
 
-PowerShell 也可用：
-```powershell
-Get-Content .\sql\init.sql | mysql -u root -p gene_tree
+**方式二：导入生成的族谱数据（推荐，含三个规模数据集）**
+
+先生成 CSV 数据，再一键导入：
+
+```bash
+# 生成 small(~500人) / medium(~5000人) / large(~50000人) 三个数据集
+python scripts/generate_all.py
+
+# 开启 local_infile 并导入
+mysql -u root -p -e "SET GLOBAL local_infile = 1;"
+mysql -u root -p --local-infile=1 gene_tree < sql/import_generated.sql
 ```
+
+导入后数据库包含三个族谱（可同时使用）：
+
+| genealogy_id | 族谱 | 姓氏 | 成员数 |
+|---|---|---|---|
+| 1 | 江氏小型族谱 | 江 | ~500 |
+| 2 | 朱氏中型族谱 | 朱 | ~5,000 |
+| 3 | 伍氏大型族谱 | 伍 | ~50,000 |
+
+> 注意：`import_generated.sql` 会清空已有的 member/parent_child/marriage 数据，但保留 user 表。详见 [scripts/README.md](scripts/README.md)。
 
 ### 6. 启动项目
 ```bash
