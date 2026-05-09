@@ -253,62 +253,106 @@ h3, h4, h5 {
 }
 
 /* ===== Tree Container ===== */
-.tree-container ul {
-    list-style: none;
-    margin: 0;
-    padding-left: 2rem;
-    position: relative;
+.tree-container {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-lg);
+    overflow: auto;
 }
 
 .tree-container > ul {
+    display: inline-block;
+    min-width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.tree-container ul {
+    position: relative;
+    margin: 0;
+    padding-top: 1.1rem;
     padding-left: 0;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.tree-container li {
+    list-style: none;
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    text-align: center;
+    padding: 1.1rem 0.35rem 0;
+}
+
+.tree-container li::before,
+.tree-container li::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 50%;
+    width: 50%;
+    height: 1.1rem;
+    border-top: 2px solid var(--color-border);
+}
+
+.tree-container li::after {
+    right: auto;
+    left: 50%;
+    border-left: 2px solid var(--color-border);
+}
+
+.tree-container li:only-child::before,
+.tree-container li:only-child::after {
+    display: none;
+}
+
+.tree-container li:only-child {
+    padding-top: 0;
+}
+
+.tree-container li:first-child::before,
+.tree-container li:last-child::after {
+    border: 0 none;
+}
+
+.tree-container li:last-child::before {
+    border-right: 2px solid var(--color-border);
+    border-radius: 0 10px 0 0;
+}
+
+.tree-container li:first-child::after {
+    border-radius: 10px 0 0 0;
+}
+
+.tree-container ul ul::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 0;
+    height: 1.1rem;
+    border-left: 2px solid var(--color-border);
 }
 
 .tree-container > ul::before {
     display: none;
 }
 
-.tree-container ul::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0.5rem;
-    left: 0.75rem;
-    width: 2px;
-    background: var(--color-border);
-}
-
-.tree-container li {
-    margin: 0.3rem 0;
-    position: relative;
-    padding-left: 1.25rem;
-}
-
-.tree-container li::before {
-    content: "";
-    position: absolute;
-    top: 0.75rem;
-    left: 0;
-    width: 1rem;
-    height: 2px;
-    background: var(--color-border);
-}
-
-.tree-container > ul > li::before {
-    display: none;
-}
-
-.tree-container > ul > li {
-    padding-left: 0;
-}
-
 /* Father branch styling */
-.tree-container .branch-father > ul::before {
-    background: var(--color-info);
+.tree-container li.branch-father::before,
+.tree-container li.branch-father::after {
+    border-top-color: var(--color-info);
 }
 
-.tree-container .branch-father > li::before {
-    background: var(--color-info);
+.tree-container li.branch-father:last-child::before {
+    border-right-color: var(--color-info);
+}
+
+.tree-container li.branch-father > ul::before {
+    border-left-color: var(--color-info);
 }
 
 .tree-container .branch-father .node-label {
@@ -318,12 +362,17 @@ h3, h4, h5 {
 }
 
 /* Mother branch styling */
-.tree-container .branch-mother > ul::before {
-    background: #d63384;
+.tree-container li.branch-mother::before,
+.tree-container li.branch-mother::after {
+    border-top-color: #d63384;
 }
 
-.tree-container .branch-mother > li::before {
-    background: #d63384;
+.tree-container li.branch-mother:last-child::before {
+    border-right-color: #d63384;
+}
+
+.tree-container li.branch-mother > ul::before {
+    border-left-color: #d63384;
 }
 
 .tree-container .branch-mother .node-label {
@@ -334,40 +383,48 @@ h3, h4, h5 {
 
 /* Branch labels */
 .branch-label {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
     font-size: var(--font-size-sm);
-    font-weight: 600;
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--radius-sm);
-    margin-bottom: 0.2rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    margin-bottom: 0.35rem;
 }
 
 .branch-label-father {
     background: var(--color-info-light);
     color: var(--color-info);
+    border: 1px solid rgba(69, 123, 157, 0.22);
 }
 
 .branch-label-mother {
     background: #fce4ec;
     color: #c2185b;
+    border: 1px solid rgba(214, 51, 132, 0.22);
 }
 
 /* Node label (default / descendant) */
 .node-label {
     display: inline-block;
-    padding: 0.3rem 0.7rem;
+    padding: 0.38rem 0.82rem;
     background: var(--color-primary-light);
-    border: 1px solid rgba(67, 97, 238, 0.2);
-    border-radius: var(--radius-sm);
+    border: 1px solid rgba(67, 97, 238, 0.24);
+    border-radius: 999px;
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-primary-dark);
-    transition: background 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, var(--shadow-sm);
     cursor: default;
 }
 
 .node-label:hover {
-    background: rgba(67, 97, 238, 0.15);
+    background: rgba(67, 97, 238, 0.16);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
 }
 
 /* Collapsible node */
@@ -377,10 +434,10 @@ h3, h4, h5 {
 }
 
 .node-label.collapsible::before {
-    content: "▼";
+    content: "▾";
     display: inline-block;
     margin-right: 0.35rem;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     transition: transform 0.2s;
 }
 
@@ -388,9 +445,9 @@ h3, h4, h5 {
     transform: rotate(-90deg);
 }
 
-.tree-children {
-    overflow: hidden;
-    transition: max-height 0.3s ease;
+.node-label.loading {
+    opacity: 0.65;
+    pointer-events: none;
 }
 
 .tree-children.hidden {
@@ -400,6 +457,7 @@ h3, h4, h5 {
 /* Tree toolbar */
 .tree-toolbar {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
     margin-bottom: var(--space-md);
 }
@@ -686,6 +744,32 @@ main.container {
     .tree-toolbar {
         flex-wrap: wrap;
     }
+
+    .tree-container {
+        padding: var(--space-md);
+    }
+
+    .tree-container > ul {
+        display: block;
+    }
+
+    .tree-container ul {
+        white-space: normal;
+        padding-top: 0.5rem;
+        text-align: left;
+    }
+
+    .tree-container li {
+        display: block;
+        padding: 0.5rem 0 0 1rem;
+        text-align: left;
+    }
+
+    .tree-container li::before,
+    .tree-container li::after,
+    .tree-container ul ul::before {
+        display: none;
+    }
 }
 
 /* ===== Dark Mode Component Overrides ===== */
@@ -773,9 +857,11 @@ main.container {
     color: #ff8fab;
 }
 
-[data-theme="dark"] .branch-mother > ul::before,
-[data-theme="dark"] .branch-mother > li::before {
-    background: #ff8fab;
+[data-theme="dark"] .tree-container li.branch-mother::before,
+[data-theme="dark"] .tree-container li.branch-mother::after,
+[data-theme="dark"] .tree-container li.branch-mother > ul::before {
+    border-top-color: #ff8fab;
+    border-left-color: #ff8fab;
 }
 
 [data-theme="dark"] .toast {

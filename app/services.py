@@ -1,6 +1,7 @@
 from collections import defaultdict, deque
 
 from django.db import connection
+from django.utils import timezone
 
 from .models import Marriage, Member, ParentChild
 
@@ -135,6 +136,76 @@ def build_ancestor_tree(root_member_id, max_depth=10):
         }
 
     return build_node(root, depth=1)
+
+
+def export_genealogy_tree(genealogy_id):
+    members = list(
+        Member.objects.filter(genealogy_id=genealogy_id)
+        .values("member_id", "name", "gender", "birth_year", "death_year")
+        .order_by("member_id")
+    )
+    parent_child_rows = list(
+        ParentChild.objects.filter(
+            parent__genealogy_id=genealogy_id,
+            child__genealogy_id=genealogy_id,
+        )
+        .values("parent_id", "child_id", "relation_type")
+        .order_by("parent_id", "child_id")
+    )
+    marriage_rows = list(
+        Marriage.objects.filter(
+            spouse1__genealogy_id=genealogy_id,
+            spouse2__genealogy_id=genealogy_id,
+        )
+        .values("marriage_id", "spouse1_id", "spouse2_id", "start_date", "end_date", "status")
+        .order_by("marriage_id")
+    )
+    marriages = [
+        {
+            **row,
+            "start_date": row["start_date"].isoformat() if row["start_date"] else None,
+            "end_date": row["end_date"].isoformat() if row["end_date"] else None,
+        }
+        for row in marriage_rows
+    ]
+
+    children_map = defaultdict(list)
+    parents_map = defaultdict(list)
+    parent_ids = set()
+    child_ids = set()
+    for row in parent_child_rows:
+        relation_type = (row["relation_type"] or "").strip().lower()
+        parent_id = row["parent_id"]
+        child_id = row["child_id"]
+        children_map[parent_id].append({"child_id": child_id, "relation_type": relation_type})
+        parents_map[child_id].append({"parent_id": parent_id, "relation_type": relation_type})
+        parent_ids.add(parent_id)
+        child_ids.add(child_id)
+
+    for member_id in children_map:
+        children_map[member_id].sort(key=lambda item: item["child_id"])
+    for member_id in parents_map:
+        parents_map[member_id].sort(key=lambda item: item["parent_id"])
+
+    roots = sorted(parent_ids - child_ids)
+    nodes = [
+        {
+            **member,
+            "parents": parents_map.get(member["member_id"], []),
+            "children": children_map.get(member["member_id"], []),
+        }
+        for member in members
+    ]
+    return {
+        "genealogy_id": genealogy_id,
+        "exported_at": timezone.now().isoformat(),
+        "total_members": len(members),
+        "total_parent_child_links": len(parent_child_rows),
+        "total_marriages": len(marriage_rows),
+        "roots": roots,
+        "nodes": nodes,
+        "marriages": marriages,
+    }
 
 
 def shortest_relationship_path(member_id_1, member_id_2):

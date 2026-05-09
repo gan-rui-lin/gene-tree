@@ -10,6 +10,7 @@ urlpatterns = [
     path("members-page", views.members_page_view, name="members-page"),
     path("tree-page", views.tree_page_view, name="tree-page"),
     path("ancestors-tree-page", views.ancestors_tree_page_view, name="ancestors-tree-page"),
+    path("genealogy-tree-download", views.genealogy_tree_download_view, name="genealogy-tree-download"),
     path("register", views.register_view, name="register"),
     path("login", views.login_view, name="login"),
     path("logout", views.logout_view, name="logout"),

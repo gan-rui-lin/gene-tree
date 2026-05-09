@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -20,6 +20,7 @@ from .services import (
     fetch_longest_lifespan_generation,
     fetch_spouse_and_children,
     fetch_unmarried_male_over_50,
+    export_genealogy_tree,
     shortest_relationship_path,
     shortest_relationship_path_sql_bfs,
 )
@@ -883,6 +884,27 @@ def ancestors_tree_page_view(request):
             "tree_json": json.dumps(tree, ensure_ascii=False),
         },
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def genealogy_tree_download_view(request):
+    accessible_ids = _accessible_genealogy_ids(request.user)
+    if not accessible_ids:
+        return HttpResponseForbidden("无权限访问该族谱")
+
+    genealogy_id = _to_int(request.GET.get("genealogy_id"))
+    if genealogy_id is None:
+        genealogy_id = accessible_ids[0]
+    if genealogy_id not in accessible_ids:
+        return HttpResponseForbidden("无权限访问该族谱")
+
+    payload = export_genealogy_tree(genealogy_id)
+    content = json.dumps(payload, ensure_ascii=False, indent=2)
+    filename = f"genealogy_{genealogy_id}_tree.json"
+    response = HttpResponse(content, content_type="application/json; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @login_required
