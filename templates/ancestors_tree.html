@@ -19,16 +19,10 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">选择成员</label>
-        <select name="member_id" class="form-select">
-            {% for member in members %}
-                <option value="{{ member.member_id }}" {% if member.member_id == selected_member_id %}selected{% endif %}>
-                    {{ member.member_id }} - {{ member.name }}
-                </option>
-            {% endfor %}
-        </select>
-        {% if members_truncated %}
-        <div class="form-text">成员较多，当前仅显示 {{ members|length }} / {{ members_total }} 条，可直接修改 URL 的 member_id 参数访问指定成员。</div>
-        {% endif %}
+        <input type="hidden" name="member_id" id="member-id-input" value="{{ selected_member_id|default_if_none:'' }}">
+        <input id="member-search-input" class="form-control" type="text" autocomplete="off" placeholder="输入成员姓名前缀搜索" value="{{ selected_member_label }}">
+        <div id="member-search-results" class="list-group mt-1"></div>
+        <div class="form-text">输入姓名前缀后，点击候选项自动填入成员编号。</div>
     </div>
     <div class="col-md-2 d-flex align-items-end">
         <button class="btn btn-outline-primary w-100">展示</button>
@@ -45,6 +39,85 @@
 <div id="tree-container" class="tree-container"></div>
 
 <script>
+const formEl = document.querySelector('form[method="get"]');
+const genealogySelectEl = document.querySelector('select[name="genealogy_id"]');
+const memberIdInputEl = document.getElementById('member-id-input');
+const memberSearchInputEl = document.getElementById('member-search-input');
+const memberSearchResultsEl = document.getElementById('member-search-results');
+
+let searchTimer = null;
+
+function clearMemberSearchResults() {
+    memberSearchResultsEl.innerHTML = '';
+}
+
+function selectMember(item) {
+    memberIdInputEl.value = String(item.member_id);
+    memberSearchInputEl.value = item.member_id + ' - ' + item.name;
+    clearMemberSearchResults();
+}
+
+function renderMemberSearchResults(items) {
+    if (!items || items.length === 0) {
+        memberSearchResultsEl.innerHTML = '<div class="list-group-item text-muted">无匹配成员</div>';
+        return;
+    }
+    memberSearchResultsEl.innerHTML = '';
+    items.forEach(function(item) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-group-item list-group-item-action';
+        button.textContent = item.member_id + ' - ' + item.name;
+        button.addEventListener('click', function() {
+            selectMember(item);
+        });
+        memberSearchResultsEl.appendChild(button);
+    });
+}
+
+async function searchMembersByName(prefix) {
+    const genealogyId = genealogySelectEl.value;
+    const params = new URLSearchParams({
+        genealogy_id: genealogyId,
+        name: prefix,
+        limit: '30',
+    });
+    const response = await fetch('/members?' + params.toString());
+    if (!response.ok) {
+        throw new Error('search_failed');
+    }
+    const payload = await response.json();
+    renderMemberSearchResults(payload.items || []);
+}
+
+memberSearchInputEl.addEventListener('input', function() {
+    const keyword = memberSearchInputEl.value.trim();
+    memberIdInputEl.value = '';
+    clearTimeout(searchTimer);
+    if (!keyword) {
+        clearMemberSearchResults();
+        return;
+    }
+    searchTimer = setTimeout(function() {
+        searchMembersByName(keyword).catch(function() {
+            memberSearchResultsEl.innerHTML = '<div class="list-group-item text-danger">搜索失败</div>';
+        });
+    }, 180);
+});
+
+genealogySelectEl.addEventListener('change', function() {
+    memberIdInputEl.value = '';
+    memberSearchInputEl.value = '';
+    clearMemberSearchResults();
+});
+
+formEl.addEventListener('submit', function(event) {
+    if (!memberIdInputEl.value) {
+        event.preventDefault();
+        memberSearchResultsEl.innerHTML = '<div class="list-group-item text-danger">请先从候选中选择成员</div>';
+    }
+});
+
 const treeData = JSON.parse('{{ tree_json|escapejs }}');
 
 function createNodeElement(node) {

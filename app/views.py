@@ -66,23 +66,21 @@ def _is_member_accessible(user, member):
     ).exists()
 
 
-def _member_options_for_genealogy(genealogy_id, selected_member_id, limit=500):
+def _resolve_selected_member(genealogy_id, selected_member_id):
     base_qs = Member.objects.filter(genealogy_id=genealogy_id).order_by("member_id")
-    if selected_member_id is None:
-        selected_member_id = base_qs.values_list("member_id", flat=True).first()
+    selected_member = None
 
-    selected_member = (
-        base_qs.filter(member_id=selected_member_id).first() if selected_member_id else None
+    if selected_member_id is not None:
+        selected_member = base_qs.filter(member_id=selected_member_id).first()
+
+    if selected_member is None:
+        selected_member = base_qs.first()
+        selected_member_id = selected_member.member_id if selected_member else None
+
+    selected_member_label = (
+        f"{selected_member.member_id} - {selected_member.name}" if selected_member else ""
     )
-    members = list(base_qs[:limit])
-
-    if selected_member and all(m.member_id != selected_member.member_id for m in members):
-        members.append(selected_member)
-        members.sort(key=lambda m: m.member_id)
-
-    total = base_qs.count()
-    members_truncated = total > len(members)
-    return members, selected_member, selected_member_id, total, members_truncated
+    return selected_member, selected_member_id, selected_member_label
 
 
 def _build_dashboard_stats(genealogy_id):
@@ -272,9 +270,15 @@ def members_view(request):
             return JsonResponse({"error": "permission_denied"}, status=403)
 
         name_prefix = request.GET.get("name", "").strip()
+        limit = _to_int(request.GET.get("limit"))
+        if limit is not None:
+            limit = max(1, min(limit, 200))
         queryset = Member.objects.filter(genealogy_id=genealogy_id)
         if name_prefix:
             queryset = queryset.filter(name__startswith=name_prefix)
+        queryset = queryset.order_by("member_id")
+        if limit is not None:
+            queryset = queryset[:limit]
 
         members = list(
             queryset.values(
@@ -285,7 +289,7 @@ def members_view(request):
                 "birth_year",
                 "death_year",
                 "biography",
-            ).order_by("member_id")
+            )
         )
         return JsonResponse({"items": members})
 
@@ -784,8 +788,8 @@ def tree_page_view(request):
                 "error": "当前用户还没有可访问的族谱",
                 "genealogies": [],
                 "selected_genealogy_id": None,
-                "members": [],
                 "selected_member_id": None,
+                "selected_member_label": "",
                 "root_json": json.dumps({}, ensure_ascii=False),
             },
         )
@@ -804,11 +808,9 @@ def tree_page_view(request):
     if selected_genealogy_id not in accessible_ids:
         return HttpResponseForbidden("无权限访问该族谱")
 
-    members, selected_member, selected_member_id, members_total, members_truncated = (
-        _member_options_for_genealogy(
-            genealogy_id=selected_genealogy_id,
-            selected_member_id=selected_member_id,
-        )
+    selected_member, selected_member_id, selected_member_label = _resolve_selected_member(
+        genealogy_id=selected_genealogy_id,
+        selected_member_id=selected_member_id,
     )
     root_node = {}
     if selected_member:
@@ -824,10 +826,8 @@ def tree_page_view(request):
         {
             "genealogies": genealogies,
             "selected_genealogy_id": selected_genealogy_id,
-            "members": members,
             "selected_member_id": selected_member_id,
-            "members_total": members_total,
-            "members_truncated": members_truncated,
+            "selected_member_label": selected_member_label,
             "root_json": json.dumps(root_node, ensure_ascii=False),
         },
     )
@@ -846,8 +846,8 @@ def ancestors_tree_page_view(request):
                 "error": "当前用户还没有可访问的族谱",
                 "genealogies": [],
                 "selected_genealogy_id": None,
-                "members": [],
                 "selected_member_id": None,
+                "selected_member_label": "",
                 "tree_json": json.dumps({}, ensure_ascii=False),
             },
         )
@@ -866,11 +866,9 @@ def ancestors_tree_page_view(request):
     if selected_genealogy_id not in accessible_ids:
         return HttpResponseForbidden("无权限访问该族谱")
 
-    members, selected_member, selected_member_id, members_total, members_truncated = (
-        _member_options_for_genealogy(
-            genealogy_id=selected_genealogy_id,
-            selected_member_id=selected_member_id,
-        )
+    selected_member, selected_member_id, selected_member_label = _resolve_selected_member(
+        genealogy_id=selected_genealogy_id,
+        selected_member_id=selected_member_id,
     )
     tree = build_ancestor_tree(selected_member.member_id) if selected_member else {}
 
@@ -880,10 +878,8 @@ def ancestors_tree_page_view(request):
         {
             "genealogies": genealogies,
             "selected_genealogy_id": selected_genealogy_id,
-            "members": members,
             "selected_member_id": selected_member_id,
-            "members_total": members_total,
-            "members_truncated": members_truncated,
+            "selected_member_label": selected_member_label,
             "tree_json": json.dumps(tree, ensure_ascii=False),
         },
     )
