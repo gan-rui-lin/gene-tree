@@ -12,16 +12,18 @@ python scripts/generate_all.py
 python scripts/generate_family_csv.py --out-dir sql/generated/small \
     --target 500 --seed 42 --genealogy-id 1 \
     --start-member-id 10000 --start-marriage-id 10000 \
-    --start-year 1920 --founders 30 --gen-span 15
+    --start-year 1860 --founders 8 --gen-span 17 \
+    --min-children 2 --max-children 4 --external-spouse-ratio 0.92 \
+    --male-birth-ratio 0.64
 ```
 
 ## 数据集规格
 
 | 数据集 | genealogy_id | 成员数 | 婚姻数 | 年份范围 | 用途 |
 |--------|-------------|--------|--------|----------|------|
-| `sql/generated/small/` | 1 | 500 | 154 | 1917~2026 | 开发联调 |
-| `sql/generated/medium/` | 2 | 5,000 | 1,817 | 1807~2026 | 功能测试 |
-| `sql/generated/large/` | 3 | 50,000 | 14,475 | 1778~2023 | 性能压测 |
+| `sql/generated/small/` | 1 | 500 | 138 | 1857~1948 | 开发联调 |
+| `sql/generated/medium/` | 2 | 5,000 | 1,535 | 1721~1921 | 功能测试 |
+| `sql/generated/large/` | 3 | 50,000 | 13,987 | 1598~1909 | 性能压测 |
 
 三个数据集可同时导入同一数据库（genealogy_id 和 member_id 范围互不重叠）。
 
@@ -60,9 +62,9 @@ mysql -u root -p --local-infile=1 gene_tree < sql/import_generated.sql
 导入后预期：
 | genealogy_id | 族谱 | 姓氏 | 成员数 | 婚姻数 |
 |---|---|---|---|---|
-| 1 | 江氏小型族谱 | 江 | 500 | 154 |
-| 2 | 朱氏中型族谱 | 朱 | 5,000 | 1,817 |
-| 3 | 伍氏大型族谱 | 伍 | 50,000 | 14,475 |
+| 1 | 江氏小型族谱 | 江 | 500 | 138 |
+| 2 | 朱氏中型族谱 | 朱 | 5,000 | 1,535 |
+| 3 | 伍氏大型族谱 | 伍 | 50,000 | 13,987 |
 
 ### 常见问题
 
@@ -86,12 +88,15 @@ mysql -u root -p --local-infile=1 gene_tree < sql/import_generated.sql
 | `--start-year` | 0（自动） | 族谱起始年份（0 = 根据 target 自动计算） |
 | `--founders` | 0（自动） | 创始夫妇数量（0 = 根据 target 自动计算） |
 | `--gen-span` | 20 | 每代年数跨度（18~25 为合理范围） |
-| `--min-children` | 3 | 每对夫妇最少子女数 |
-| `--max-children` | 5 | 每对夫妇最多子女数 |
+| `--min-children` | 2 | 每对夫妇最少子女数 |
+| `--max-children` | 4 | 每对夫妇最多子女数 |
+| `--external-spouse-ratio` | 0.9 | 外姓（外部引入）配偶概率，越高越偏向异姓婚配 |
+| `--male-birth-ratio` | 0.62 | 男胎概率（用于调节婚配规模增长） |
 
 ## 数据生成规则
 
 - **中文姓名**：100 姓氏 + 50 男名 + 50 女名随机组合，30% 概率双字名
+- **姓氏策略**：血缘后代默认沿父系姓氏；配偶优先外部引入（高概率异姓），避免“全员同姓配偶”
 - **婚配约束**：男 22~60 岁、女 20~55 岁、年龄差 ≤10 年、近亲三代不婚配
 - **在世概率**：按年龄动态计算（≤30 岁 98%、≤50 岁 90%、≤70 岁 50%、≤85 岁 15%）
 - **起始年份**：根据目标人数自动推算，确保族谱延续到 2026 年仍有在世成员
