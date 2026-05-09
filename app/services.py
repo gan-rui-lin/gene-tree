@@ -121,9 +121,10 @@ def build_ancestor_tree(root_member_id, max_depth=10):
         father = None
         mother = None
         for link in parent_links:
-            if link.relation_type == ParentChild.RELATION_FATHER:
+            relation_type = (link.relation_type or "").strip().lower()
+            if relation_type == ParentChild.RELATION_FATHER:
                 father = build_node(link.parent, depth + 1)
-            elif link.relation_type == ParentChild.RELATION_MOTHER:
+            elif relation_type == ParentChild.RELATION_MOTHER:
                 mother = build_node(link.parent, depth + 1)
 
         return {

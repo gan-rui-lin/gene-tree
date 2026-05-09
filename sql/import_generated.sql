@@ -56,7 +56,8 @@ SET `death_year` = NULLIF(@death_year, '');
 LOAD DATA LOCAL INFILE 'sql/generated/small/parent_child.csv'
 INTO TABLE `parent_child` FIELDS TERMINATED BY ',' ENCLOSED BY '"'
 LINES TERMINATED BY '\n' IGNORE 1 ROWS
-(`parent_id`, `child_id`, `relation_type`);
+(`parent_id`, `child_id`, @relation_type)
+SET `relation_type` = LOWER(TRIM(@relation_type));
 
 LOAD DATA LOCAL INFILE 'sql/generated/small/marriage.csv'
 INTO TABLE `marriage` FIELDS TERMINATED BY ',' ENCLOSED BY '"'
@@ -75,7 +76,8 @@ SET `death_year` = NULLIF(@death_year, '');
 LOAD DATA LOCAL INFILE 'sql/generated/medium/parent_child.csv'
 INTO TABLE `parent_child` FIELDS TERMINATED BY ',' ENCLOSED BY '"'
 LINES TERMINATED BY '\n' IGNORE 1 ROWS
-(`parent_id`, `child_id`, `relation_type`);
+(`parent_id`, `child_id`, @relation_type)
+SET `relation_type` = LOWER(TRIM(@relation_type));
 
 LOAD DATA LOCAL INFILE 'sql/generated/medium/marriage.csv'
 INTO TABLE `marriage` FIELDS TERMINATED BY ',' ENCLOSED BY '"'
@@ -94,7 +96,8 @@ SET `death_year` = NULLIF(@death_year, '');
 LOAD DATA LOCAL INFILE 'sql/generated/large/parent_child.csv'
 INTO TABLE `parent_child` FIELDS TERMINATED BY ',' ENCLOSED BY '"'
 LINES TERMINATED BY '\n' IGNORE 1 ROWS
-(`parent_id`, `child_id`, `relation_type`);
+(`parent_id`, `child_id`, @relation_type)
+SET `relation_type` = LOWER(TRIM(@relation_type));
 
 LOAD DATA LOCAL INFILE 'sql/generated/large/marriage.csv'
 INTO TABLE `marriage` FIELDS TERMINATED BY ',' ENCLOSED BY '"'
