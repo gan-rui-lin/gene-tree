@@ -26,6 +26,9 @@
                 </option>
             {% endfor %}
         </select>
+        {% if members_truncated %}
+        <div class="form-text">成员较多，当前仅显示 {{ members|length }} / {{ members_total }} 条，可直接修改 URL 的 member_id 参数访问指定成员。</div>
+        {% endif %}
     </div>
     <div class="col-md-2 d-flex align-items-end">
         <button class="btn btn-outline-primary w-100">展示</button>
@@ -40,26 +43,49 @@
 <div id="tree-container" class="tree-container"></div>
 
 <script>
-const treeData = JSON.parse('{{ tree_json|escapejs }}');
+const rootData = JSON.parse('{{ root_json|escapejs }}');
+
+async function loadChildren(memberId, ul, label) {
+    label.classList.add('loading');
+    try {
+        const response = await fetch('/tree-children/' + memberId);
+        if (!response.ok) {
+            throw new Error('request_failed');
+        }
+        const payload = await response.json();
+        ul.innerHTML = '';
+        (payload.items || []).forEach(function(child) {
+            ul.appendChild(createNodeElement(child));
+        });
+        label.dataset.loaded = '1';
+    } catch (err) {
+        ul.innerHTML = '<li><span class="node-label">加载失败</span></li>';
+    } finally {
+        label.classList.remove('loading');
+    }
+}
 
 function createNodeElement(node) {
     const li = document.createElement('li');
-    const hasChildren = node.children && node.children.length > 0;
+    const hasChildren = !!node.has_children;
 
     const span = document.createElement('span');
-    span.className = 'node-label' + (hasChildren ? ' collapsible' : '');
+    span.className = 'node-label' + (hasChildren ? ' collapsible collapsed' : '');
     span.textContent = node.member_id + ' - ' + node.name;
+    span.dataset.memberId = String(node.member_id);
+    span.dataset.loaded = '0';
 
     if (hasChildren) {
         const childrenDiv = document.createElement('div');
-        childrenDiv.className = 'tree-children';
+        childrenDiv.className = 'tree-children hidden';
         const ul = document.createElement('ul');
-        node.children.forEach(function(child) {
-            ul.appendChild(createNodeElement(child));
-        });
         childrenDiv.appendChild(ul);
 
-        span.addEventListener('click', function() {
+        span.addEventListener('click', async function() {
+            const willExpand = span.classList.contains('collapsed');
+            if (willExpand && span.dataset.loaded !== '1') {
+                await loadChildren(node.member_id, ul, span);
+            }
             span.classList.toggle('collapsed');
             childrenDiv.classList.toggle('hidden');
         });
@@ -86,10 +112,10 @@ function toggleAll(expand) {
     });
 }
 
-if (treeData && treeData.member_id) {
+if (rootData && rootData.member_id) {
     document.getElementById('tree-toolbar').style.display = 'flex';
     const ul = document.createElement('ul');
-    ul.appendChild(createNodeElement(treeData));
+    ul.appendChild(createNodeElement(rootData));
     document.getElementById('tree-container').appendChild(ul);
 } else {
     document.getElementById('tree-container').innerHTML =

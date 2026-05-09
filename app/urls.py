@@ -30,6 +30,7 @@ urlpatterns = [
     path("relationship", views.relationship_view, name="relationship"),
     path("relationship-sql", views.relationship_sql_view, name="relationship-sql"),
     path("tree/<int:member_id>", views.tree_data_view, name="tree-data"),
+    path("tree-children/<int:member_id>", views.tree_children_view, name="tree-children"),
     path("ancestors-tree/<int:member_id>", views.ancestors_tree_data_view, name="ancestors-tree-data"),
     path("dashboard", views.dashboard_view, name="dashboard"),
 ]

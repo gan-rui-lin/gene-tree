@@ -26,6 +26,9 @@
                 </option>
             {% endfor %}
         </select>
+        {% if members_truncated %}
+        <div class="form-text">成员较多，当前仅显示 {{ members|length }} / {{ members_total }} 条，可直接修改 URL 的 member_id 参数访问指定成员。</div>
+        {% endif %}
     </div>
     <div class="col-md-2 d-flex align-items-end">
         <button class="btn btn-outline-primary w-100">展示</button>

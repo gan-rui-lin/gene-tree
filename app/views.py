@@ -10,7 +10,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .models import Genealogy, GenealogyUser, Member, User
+from .models import Genealogy, GenealogyUser, Member, ParentChild, User
 from .services import (
     build_ancestor_tree,
     build_descendant_tree,
@@ -64,6 +64,25 @@ def _is_member_accessible(user, member):
     return GenealogyUser.objects.filter(
         user=user, genealogy_id=member.genealogy_id
     ).exists()
+
+
+def _member_options_for_genealogy(genealogy_id, selected_member_id, limit=500):
+    base_qs = Member.objects.filter(genealogy_id=genealogy_id).order_by("member_id")
+    if selected_member_id is None:
+        selected_member_id = base_qs.values_list("member_id", flat=True).first()
+
+    selected_member = (
+        base_qs.filter(member_id=selected_member_id).first() if selected_member_id else None
+    )
+    members = list(base_qs[:limit])
+
+    if selected_member and all(m.member_id != selected_member.member_id for m in members):
+        members.append(selected_member)
+        members.sort(key=lambda m: m.member_id)
+
+    total = base_qs.count()
+    members_truncated = total > len(members)
+    return members, selected_member, selected_member_id, total, members_truncated
 
 
 def _build_dashboard_stats(genealogy_id):
@@ -494,6 +513,38 @@ def tree_data_view(request, member_id):
 
 @api_login_required
 @require_http_methods(["GET"])
+def tree_children_view(request, member_id):
+    member = Member.objects.filter(member_id=member_id).first()
+    if not member:
+        return JsonResponse({"error": "member_not_found"}, status=404)
+    if not _is_member_accessible(request.user, member):
+        return JsonResponse({"error": "permission_denied"}, status=403)
+
+    child_links = list(
+        ParentChild.objects.filter(
+            parent_id=member.member_id,
+            child__genealogy_id=member.genealogy_id,
+        )
+        .select_related("child")
+        .order_by("child__member_id")
+    )
+    child_ids = [link.child_id for link in child_links]
+    nodes_with_children = set(
+        ParentChild.objects.filter(parent_id__in=child_ids).values_list("parent_id", flat=True)
+    )
+    items = [
+        {
+            "member_id": link.child.member_id,
+            "name": link.child.name,
+            "has_children": link.child_id in nodes_with_children,
+        }
+        for link in child_links
+    ]
+    return JsonResponse({"items": items})
+
+
+@api_login_required
+@require_http_methods(["GET"])
 def ancestors_tree_data_view(request, member_id):
     member = Member.objects.filter(member_id=member_id).first()
     if not member:
@@ -726,7 +777,18 @@ def tree_page_view(request):
     links = GenealogyUser.objects.filter(user=request.user).select_related("genealogy")
     genealogies = [link.genealogy for link in links]
     if not genealogies:
-        return render(request, "tree.html", {"error": "当前用户还没有可访问的族谱"})
+        return render(
+            request,
+            "tree.html",
+            {
+                "error": "当前用户还没有可访问的族谱",
+                "genealogies": [],
+                "selected_genealogy_id": None,
+                "members": [],
+                "selected_member_id": None,
+                "root_json": json.dumps({}, ensure_ascii=False),
+            },
+        )
 
     accessible_ids = [g.genealogy_id for g in genealogies]
     selected_genealogy_id = _to_int(request.GET.get("genealogy_id"))
@@ -742,12 +804,19 @@ def tree_page_view(request):
     if selected_genealogy_id not in accessible_ids:
         return HttpResponseForbidden("无权限访问该族谱")
 
-    members = Member.objects.filter(genealogy_id=selected_genealogy_id).order_by("member_id")
-    if selected_member_id is None and members:
-        selected_member_id = members[0].member_id
-
-    selected_member = members.filter(member_id=selected_member_id).first()
-    tree = build_descendant_tree(selected_member.member_id) if selected_member else {}
+    members, selected_member, selected_member_id, members_total, members_truncated = (
+        _member_options_for_genealogy(
+            genealogy_id=selected_genealogy_id,
+            selected_member_id=selected_member_id,
+        )
+    )
+    root_node = {}
+    if selected_member:
+        root_node = {
+            "member_id": selected_member.member_id,
+            "name": selected_member.name,
+            "has_children": ParentChild.objects.filter(parent_id=selected_member.member_id).exists(),
+        }
 
     return render(
         request,
@@ -757,7 +826,9 @@ def tree_page_view(request):
             "selected_genealogy_id": selected_genealogy_id,
             "members": members,
             "selected_member_id": selected_member_id,
-            "tree_json": json.dumps(tree, ensure_ascii=False),
+            "members_total": members_total,
+            "members_truncated": members_truncated,
+            "root_json": json.dumps(root_node, ensure_ascii=False),
         },
     )
 
@@ -768,7 +839,18 @@ def ancestors_tree_page_view(request):
     links = GenealogyUser.objects.filter(user=request.user).select_related("genealogy")
     genealogies = [link.genealogy for link in links]
     if not genealogies:
-        return render(request, "ancestors_tree.html", {"error": "当前用户还没有可访问的族谱"})
+        return render(
+            request,
+            "ancestors_tree.html",
+            {
+                "error": "当前用户还没有可访问的族谱",
+                "genealogies": [],
+                "selected_genealogy_id": None,
+                "members": [],
+                "selected_member_id": None,
+                "tree_json": json.dumps({}, ensure_ascii=False),
+            },
+        )
 
     accessible_ids = [g.genealogy_id for g in genealogies]
     selected_genealogy_id = _to_int(request.GET.get("genealogy_id"))
@@ -784,11 +866,12 @@ def ancestors_tree_page_view(request):
     if selected_genealogy_id not in accessible_ids:
         return HttpResponseForbidden("无权限访问该族谱")
 
-    members = Member.objects.filter(genealogy_id=selected_genealogy_id).order_by("member_id")
-    if selected_member_id is None and members:
-        selected_member_id = members[0].member_id
-
-    selected_member = members.filter(member_id=selected_member_id).first()
+    members, selected_member, selected_member_id, members_total, members_truncated = (
+        _member_options_for_genealogy(
+            genealogy_id=selected_genealogy_id,
+            selected_member_id=selected_member_id,
+        )
+    )
     tree = build_ancestor_tree(selected_member.member_id) if selected_member else {}
 
     return render(
@@ -799,6 +882,8 @@ def ancestors_tree_page_view(request):
             "selected_genealogy_id": selected_genealogy_id,
             "members": members,
             "selected_member_id": selected_member_id,
+            "members_total": members_total,
+            "members_truncated": members_truncated,
             "tree_json": json.dumps(tree, ensure_ascii=False),
         },
     )
