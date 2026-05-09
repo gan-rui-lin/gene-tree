@@ -902,23 +902,42 @@ def genealogy_tree_download_view(request):
     if genealogy_id not in accessible_ids:
         return HttpResponseForbidden("无权限访问该族谱")
 
+    root_member_id = _to_int(request.GET.get("root_member_id"))
+    if root_member_id is not None:
+        root_member = Member.objects.filter(member_id=root_member_id).first()
+        if not root_member:
+            return JsonResponse({"error": "root_member_not_found"}, status=404)
+        if root_member.genealogy_id != genealogy_id:
+            return JsonResponse({"error": "root_member_not_in_genealogy"}, status=400)
+        if not _is_member_accessible(request.user, root_member):
+            return JsonResponse({"error": "permission_denied"}, status=403)
+
     fmt = (request.GET.get("format") or "json").strip().lower()
+    root_suffix = f"_root_{root_member_id}" if root_member_id is not None else ""
     if fmt == "dot":
-        content = export_genealogy_tree_dot(genealogy_id)
-        filename = f"genealogy_{genealogy_id}_tree.dot"
+        content = export_genealogy_tree_dot(genealogy_id, root_member_id=root_member_id)
+        if content is None:
+            return JsonResponse({"error": "root_member_not_found"}, status=404)
+        filename = f"genealogy_{genealogy_id}_tree{root_suffix}.dot"
         content_type = "text/vnd.graphviz; charset=utf-8"
     elif fmt == "svg":
-        content = export_genealogy_tree_svg(genealogy_id)
-        filename = f"genealogy_{genealogy_id}_tree.svg"
+        content = export_genealogy_tree_svg(genealogy_id, root_member_id=root_member_id)
+        if content is None:
+            return JsonResponse({"error": "root_member_not_found"}, status=404)
+        filename = f"genealogy_{genealogy_id}_tree{root_suffix}.svg"
         content_type = "image/svg+xml; charset=utf-8"
     elif fmt in {"drawio", "mxfile"}:
-        content = export_genealogy_tree_drawio(genealogy_id)
-        filename = f"genealogy_{genealogy_id}_tree.drawio"
+        content = export_genealogy_tree_drawio(genealogy_id, root_member_id=root_member_id)
+        if content is None:
+            return JsonResponse({"error": "root_member_not_found"}, status=404)
+        filename = f"genealogy_{genealogy_id}_tree{root_suffix}.drawio"
         content_type = "application/xml; charset=utf-8"
     elif fmt == "json":
-        payload = export_genealogy_tree(genealogy_id)
+        payload = export_genealogy_tree(genealogy_id, root_member_id=root_member_id)
+        if payload is None:
+            return JsonResponse({"error": "root_member_not_found"}, status=404)
         content = json.dumps(payload, ensure_ascii=False, indent=2)
-        filename = f"genealogy_{genealogy_id}_tree.json"
+        filename = f"genealogy_{genealogy_id}_tree{root_suffix}.json"
         content_type = "application/json; charset=utf-8"
     else:
         return JsonResponse(
@@ -947,6 +966,11 @@ def dashboard_page_view(request):
     selected_genealogy = next(
         (g for g in genealogies if g.genealogy_id == selected_genealogy_id), None
     )
+    selected_root_member_id = _to_int(request.GET.get("root_member_id"))
+    if selected_root_member_id is not None:
+        root_member = Member.objects.filter(member_id=selected_root_member_id).first()
+        if not root_member or root_member.genealogy_id != selected_genealogy_id:
+            selected_root_member_id = None
     stats = _build_dashboard_stats(selected_genealogy_id)
 
     return render(
@@ -956,6 +980,7 @@ def dashboard_page_view(request):
             "genealogies": genealogies,
             "selected_genealogy_id": selected_genealogy_id,
             "selected_genealogy": selected_genealogy,
+            "selected_root_member_id": selected_root_member_id,
             "stats": stats,
         },
     )

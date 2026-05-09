@@ -29,15 +29,19 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">根成员ID（可选）</label>
+            <input type="number" class="form-control" name="root_member_id" value="{{ selected_root_member_id|default_if_none:'' }}" placeholder="例如 10238">
+        </div>
+        <div class="col-md-1 d-flex align-items-end">
             <button class="btn btn-outline-primary w-100">查看</button>
         </div>
-        <div class="col-md-6 d-flex align-items-end">
+        <div class="col-md-4 d-flex align-items-end">
             <div class="d-flex flex-wrap gap-2 w-100">
-                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=svg" download>Download SVG</a>
-                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=drawio" download>Download Draw.io</a>
-                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=dot" download>Download DOT</a>
-                <a class="btn btn-outline-secondary" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=json" download>Download JSON</a>
+                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=svg{% if selected_root_member_id %}&root_member_id={{ selected_root_member_id }}{% endif %}" download>Download SVG</a>
+                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=drawio{% if selected_root_member_id %}&root_member_id={{ selected_root_member_id }}{% endif %}" download>Download Draw.io</a>
+                <a class="btn btn-outline-success" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=dot{% if selected_root_member_id %}&root_member_id={{ selected_root_member_id }}{% endif %}" download>Download DOT</a>
+                <a class="btn btn-outline-secondary" href="/genealogy-tree-download?genealogy_id={{ selected_genealogy_id }}&format=json{% if selected_root_member_id %}&root_member_id={{ selected_root_member_id }}{% endif %}" download>Download JSON</a>
             </div>
         </div>
     </form>

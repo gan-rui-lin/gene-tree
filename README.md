@@ -117,6 +117,12 @@ python manage.py runserver
 - `GET /ancestors/{id}`
 - `GET /descendants/{id}`
 - `GET /relationship?id1=xxx&id2=xxx`
+- `GET /genealogy-tree-download?genealogy_id={gid}&format={json|dot|svg|drawio}[&root_member_id={mid}]`
+
+## 树结构下载说明
+- 在统计看板页面可直接下载 `SVG / Draw.io / DOT / JSON`。
+- `format` 可选：`json`、`dot`、`svg`、`drawio`。
+- 可选参数 `root_member_id`：仅导出该成员向下的子树（并保留子树内婚姻节点），用于大族谱局部导出。
 
 ## 补充脚本与SQL
 - 数据生成脚本：`scripts/generate_family_csv.py`

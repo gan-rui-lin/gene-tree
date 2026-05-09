@@ -139,7 +139,72 @@ def build_ancestor_tree(root_member_id, max_depth=10):
     return build_node(root, depth=1)
 
 
-def export_genealogy_tree(genealogy_id):
+def _filter_payload_by_root_member(payload, root_member_id):
+    node_map = {node["member_id"]: node for node in payload.get("nodes", [])}
+    if root_member_id not in node_map:
+        return None
+
+    descendants = set()
+    queue = deque([root_member_id])
+    while queue:
+        current = queue.popleft()
+        if current in descendants:
+            continue
+        descendants.add(current)
+        node = node_map.get(current, {})
+        for child in node.get("children", []):
+            child_id = child.get("child_id")
+            if child_id in node_map and child_id not in descendants:
+                queue.append(child_id)
+
+    included = set(descendants)
+    marriages_all = payload.get("marriages", [])
+    changed = True
+    while changed:
+        changed = False
+        for row in marriages_all:
+            s1 = row["spouse1_id"]
+            s2 = row["spouse2_id"]
+            if s1 in included or s2 in included:
+                if s1 in node_map and s1 not in included:
+                    included.add(s1)
+                    changed = True
+                if s2 in node_map and s2 not in included:
+                    included.add(s2)
+                    changed = True
+
+    filtered_nodes = []
+    parent_ids = set()
+    child_ids = set()
+    for member_id in sorted(included):
+        node = node_map[member_id]
+        children = [c for c in node.get("children", []) if c.get("child_id") in included]
+        parents = [p for p in node.get("parents", []) if p.get("parent_id") in included]
+        for c in children:
+            parent_ids.add(member_id)
+            child_ids.add(c["child_id"])
+        filtered_nodes.append({**node, "children": children, "parents": parents})
+
+    filtered_marriages = [
+        row
+        for row in marriages_all
+        if row["spouse1_id"] in included and row["spouse2_id"] in included
+    ]
+    roots = sorted(parent_ids - child_ids) if parent_ids else [root_member_id]
+
+    return {
+        **payload,
+        "root_member_id": root_member_id,
+        "total_members": len(filtered_nodes),
+        "total_parent_child_links": sum(len(node["children"]) for node in filtered_nodes),
+        "total_marriages": len(filtered_marriages),
+        "roots": roots,
+        "nodes": filtered_nodes,
+        "marriages": filtered_marriages,
+    }
+
+
+def export_genealogy_tree(genealogy_id, root_member_id=None):
     members = list(
         Member.objects.filter(genealogy_id=genealogy_id)
         .values("member_id", "name", "gender", "birth_year", "death_year")
@@ -197,7 +262,7 @@ def export_genealogy_tree(genealogy_id):
         }
         for member in members
     ]
-    return {
+    payload = {
         "genealogy_id": genealogy_id,
         "exported_at": timezone.now().isoformat(),
         "total_members": len(members),
@@ -207,6 +272,12 @@ def export_genealogy_tree(genealogy_id):
         "nodes": nodes,
         "marriages": marriages,
     }
+    if root_member_id is not None:
+        filtered = _filter_payload_by_root_member(payload, root_member_id)
+        if filtered is None:
+            return None
+        return filtered
+    return payload
 
 
 def _dot_escape(value):
@@ -290,8 +361,10 @@ def _build_tree_layout(payload):
     return positions, edges, total_width, total_height, node_width, node_height
 
 
-def export_genealogy_tree_dot(genealogy_id):
-    payload = export_genealogy_tree(genealogy_id)
+def export_genealogy_tree_dot(genealogy_id, root_member_id=None):
+    payload = export_genealogy_tree(genealogy_id, root_member_id=root_member_id)
+    if payload is None:
+        return None
     lines = [
         f"digraph genealogy_{genealogy_id} {{",
         '  graph [rankdir=TB, splines=ortho, nodesep=0.35, ranksep=0.65, pad="0.15"];',
@@ -481,8 +554,10 @@ def _layout_family_units(units, parent_edges):
     return positions, total_width, total_height, node_width, node_height
 
 
-def export_genealogy_tree_svg(genealogy_id):
-    payload = export_genealogy_tree(genealogy_id)
+def export_genealogy_tree_svg(genealogy_id, root_member_id=None):
+    payload = export_genealogy_tree(genealogy_id, root_member_id=root_member_id)
+    if payload is None:
+        return None
     units, units_by_id, _member_to_unit, parent_edges, node_map = _build_family_units(payload)
     positions, width, height, node_width, node_height = _layout_family_units(units, parent_edges)
 
@@ -563,8 +638,10 @@ def export_genealogy_tree_svg(genealogy_id):
     return "\n".join(lines) + "\n"
 
 
-def export_genealogy_tree_drawio(genealogy_id):
-    payload = export_genealogy_tree(genealogy_id)
+def export_genealogy_tree_drawio(genealogy_id, root_member_id=None):
+    payload = export_genealogy_tree(genealogy_id, root_member_id=root_member_id)
+    if payload is None:
+        return None
     positions, edges, width, height, node_width, node_height = _build_tree_layout(payload)
     modified = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
