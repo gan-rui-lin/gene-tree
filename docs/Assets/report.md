@@ -342,6 +342,8 @@ Member(member_id, name, gender, birth_year, father_name, mother_name, spouse_nam
 |----|------|------|----|------|
 | member | idx_member_name | B-tree | name | 姓名精确/前缀搜索 |
 | member | idx_member_name_prefix | 前缀索引 | name(10) | 减少索引体积，加速前缀搜索 |
+| marriage | spouse1_id 外键索引 | B-tree | spouse1_id | 给定成员作为配偶1时查婚姻记录 |
+| marriage | spouse2_id 外键索引 | B-tree | spouse2_id | 给定成员作为配偶2时查婚姻记录 |
 | parent_child | idx_parent | B-tree | parent_id | 给定父亲找子女（后代查询） |
 | parent_child | idx_child | B-tree | child_id | 给定子女找父亲（祖先查询） |
 | parent_child | idx_parent_child | 组合索引 | (parent_id, child_id) | 覆盖索引，避免回表 |
@@ -349,8 +351,21 @@ Member(member_id, name, gender, birth_year, father_name, mother_name, spouse_nam
 
 索引设计说明：
 - **双向索引**：`idx_parent` 和 `idx_child` 方向相反，覆盖递归 CTE 的两个方向（祖先向上、后代向下）
-- **前缀索引 name(10)**：中文姓名 2-4 字（6-12 字节），取前 10 字符在索引体积和区分度间取得平衡
-- **覆盖索引 (parent_id, child_id)**：查询只需这两列时，直接从索引返回，无需回表
+- **外键索引**：Django 的 `ForeignKey` 默认会为外键列建立索引；在 MySQL/InnoDB 中，外键列也必须有可用索引。因此 `marriage.spouse1_id`、`marriage.spouse2_id` 虽然没有手写 `idx_spouse1/idx_spouse2` 名称，但实际会存在外键列索引，用于配偶查询
+- **前缀索引 name(10)**：通过迁移文件中的 `RunSQL("CREATE INDEX idx_member_name_prefix ON member(name(10));")` 声明，主要用于成员管理页的姓名前缀搜索，即 Django ORM 的 `name__startswith=search_name`（对应 SQL 形态为 `name LIKE 'xxx%'`）
+- **覆盖索引 (parent_id, child_id)**：用于父到子的关系查询，例如 Q1 子女查询、`fetch_descendants` 后代递归查询、`/tree-children/{id}` 懒加载子节点等；当查询只需要 `parent_id`、`child_id` 两列时，可直接从索引返回，无需回表。由于 `parent_child` 的复合主键本身也是 `(parent_id, child_id)`，该组合索引与主键有重叠，报告中保留它主要是为了强调覆盖索引思想；实际 MySQL 优化器也可能直接选择 PRIMARY
+
+索引在 Q1-Q5 中的具体作用如下：
+
+| 查询 | 关键访问模式 | 主要发挥作用的索引 | 性能作用 |
+|------|-------------|------------------|---------|
+| Q1 配偶与子女 | `parent_child.parent_id = ?` 查子女；`marriage.spouse1_id/spouse2_id = ?` 查配偶 | `idx_parent`、成员主键索引；婚姻表外键索引 | 子女查询由全表扫描变为按父节点定位；配偶查询通过 `UNION ALL` 拆成两个等值连接后，可分别利用配偶外键索引和 `member` 主键查回成员信息 |
+| Q2 祖先递归查询 | 每一层递归都执行 `parent_child.child_id = 当前成员` | `idx_child` | 递归向上追溯时，每一层都能通过 child 索引快速找到父母；否则每扩展一层都要扫描整张 `parent_child` 表 |
+| Q3 平均寿命最长代 | `member_generation_cache` 按 `genealogy_id` 过滤并按 `generation` 分组 | `idx_mgc_genealogy_generation`、`member` 主键索引 | 查询不再实时递归计算代际，而是按 `(genealogy_id, generation)` 顺序扫描缓存并分组，再通过 `member_id` 主键连接成员表计算寿命，后续查询从约 14.8s 降至约 0.16s |
+| Q4 未婚男性 > 50 | 先汇总婚姻两端成员，再反连接 `member` | 成员主键索引；婚姻表外键索引；可配合 `member(genealogy_id)` 外键索引过滤族谱 | 将原来的 `OR` 条件 LEFT JOIN 改为 CTE + anti-join，避免优化器难以使用索引；在大数据集下从约 121.8s 降至约 0.26s |
+| Q5 早于同代平均出生年份 | 与 Q3 类似，先按族谱和代际求平均，再连接成员筛选 | `idx_mgc_genealogy_generation`、`member` 主键索引 | 代际分组直接走缓存表组合索引，避免每次用递归 CTE 重算所有成员代际，查询从约 14.7s 降至约 0.50s |
+
+总体来说，`parent_child` 的双向索引主要服务递归关系查询（Q1/Q2 以及后代查询），`member_generation_cache(genealogy_id, generation)` 主要服务代际统计（Q3/Q5），而 Q4 的性能提升主要来自 SQL 改写让优化器能够使用普通等值连接和主键/外键索引，避免 `OR` 条件造成的大范围扫描。
 
 ### 约束设计
 
@@ -534,6 +549,19 @@ FROM generation_lifespan ORDER BY avg_lifespan DESC LIMIT 1;
 
 代际缓存通过 BFS 构建：从入度为 0 的根节点（始祖，generation=1）开始，子节点 generation = 父节点 + 1，多父母取较小值。缓存重建使用 `transaction.atomic()` 包裹，先删除旧缓存再批量插入新记录，确保重建过程中不会出现中间态数据。
 
+缓存未命中或缓存过期时，系统不会直接返回空结果，而是在查询前调用 `_ensure_generation_cache(genealogy_id)` 做惰性检查：
+
+```python
+member_count = Member.objects.filter(genealogy_id=genealogy_id).count()
+cache_count = MemberGenerationCache.objects.filter(genealogy_id=genealogy_id).count()
+if member_count != cache_count:
+    _refresh_generation_cache(genealogy_id)
+```
+
+如果发现某个族谱的成员数和缓存记录数不一致，就触发 `_refresh_generation_cache`：先用 BFS 重新计算该族谱所有成员的代际，再在事务中删除旧缓存并批量插入新缓存。这样 Q3 的首次查询可能需要承担一次缓存构建成本（约 2.5s），但后续查询就可以直接读取缓存表（约 0.16s）。如果缓存表为空，也属于 `member_count != cache_count`，会自动重建。
+
+需要注意的是，这种失效策略主要检测成员增删导致的缓存缺失；如果只修改了父子关系但成员数量没变，严格来说也应主动刷新缓存。当前项目的关系数据主要由生成脚本和批量导入产生，关系结构相对稳定；若后续开放在线编辑父子关系，应在增删改 `parent_child` 后主动删除或重建该族谱的 `member_generation_cache`。
+
 ### Q4：未婚男性统计
 
 查询年龄超过 50 岁且无配偶的男性。初版用 `OR` 条件 LEFT JOIN（~121.8s），优化后用 CTE + anti-join（~0.26s）：
@@ -575,6 +603,25 @@ WHERE mgc.genealogy_id = %s AND m.birth_year IS NOT NULL
 ORDER BY mgc.generation, m.birth_year, m.member_id;
 ```
 
+这个查询分两阶段执行：
+
+1. `generation_avg_birth` 先按代际分组，计算每一代的平均出生年份。例如第 3 代平均出生于 1892 年，第 4 代平均出生于 1925 年。
+2. 主查询再把每个成员和其所属代际的平均出生年份连接起来，筛选 `m.birth_year < gab.avg_birth_year` 的成员，也就是“比本代平均更早出生”的成员。
+
+`member_generation_cache` 可以理解为一个手工维护的“物化结果表”：成员的代际 `generation` 本来可以由 `parent_child` 表递归推导出来，但如果每次 Q5 都从亲子关系重新递归计算全部成员代际，成本很高。因此系统提前把“member_id → generation”这个中间结果保存到 `member_generation_cache` 中。查询时直接读取这个已物化的代际结果，再和 `member` 表做聚合统计。
+
+其工作机制如下：
+
+```text
+parent_child 原始亲子边
+        ↓ BFS 计算代际
+member_generation_cache(member_id, genealogy_id, generation)
+        ↓ Q3/Q5 直接按 generation 聚合
+统计平均寿命 / 平均出生年份
+```
+
+缓存表的刷新采用惰性策略：Q3/Q5 查询前先比较该族谱的成员总数和缓存记录数；如果缓存为空或数量不一致，就重新 BFS 计算该族谱所有成员代际，并在事务中删除旧缓存、批量写入新缓存。它和数据库原生物化视图的思想相似，都是把昂贵查询的中间结果落表复用；区别是 MySQL 没有 PostgreSQL 那种内置 materialized view，本项目是在应用层手动维护这张物化缓存表。
+
 ### Q6：亲缘路径查询（BFS 最短路径）
 
 将族谱视为无向图（节点=成员，边=父子/婚姻，均双向），通过 SQL 构建边集合，应用层 BFS 求最短路径：
@@ -599,7 +646,7 @@ UNION ALL SELECT spouse2_id, spouse1_id, 'spouse' FROM marriage;
 | `shortest_relationship_path` | Django ORM `values()` 查询 parent_child 和 marriage 表 | Python `deque` | 数据量较小时，代码更 Pythonic，便于调试 |
 | `shortest_relationship_path_sql_bfs` | 原生 SQL 一条 UNION ALL 查询全部边 | Python `deque` | 数据量大时，减少数据库交互次数，单次查询加载完整边集 |
 
-两种实现的 BFS 算法逻辑完全一致，差异仅在边集合的加载方式。实测在 5 万成员规模下，SQL 版本因单次查询完成边加载，整体耗时略优于 ORM 版本的多次查询。
+两种实现的 BFS 算法逻辑完全一致，差异仅在边集合的加载方式。分析查询页面的 Q6 实际调用 `/relationship-sql?id1=&id2=`，采用的是**原生 SQL 加载边集合 + 应用层 BFS** 的策略。注意此处的”SQL BFS”并非将 BFS 全部写入 SQL 递归 CTE，而是用 SQL 高效取出父子/婚姻边，再由 Python 队列完成最短路径搜索。实测在 5 万成员规模下，SQL 版本因单次查询完成边加载，整体耗时略优于 ORM 版本的多次查询。
 
 ## 3.3 索引对查询执行的影响
 
