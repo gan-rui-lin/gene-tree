@@ -172,6 +172,13 @@ function renderError(msg) {
     return '<div class="alert alert-danger mb-0">' + msg + '</div>';
 }
 
+function renderCollapsibleResult(title, content) {
+    return '<details class="query-result-panel" open>' +
+        '<summary><span>' + title + '</span><span class="query-result-hint">点击收起/展开</span></summary>' +
+        '<div class="query-result-body">' + content + '</div>' +
+        '</details>';
+}
+
 /* Render a key-value stat card */
 function renderStatCard(label, value, sub) {
     var html = '<div class="row g-2">' +
@@ -228,13 +235,13 @@ async function fetchAndRender(url, resultId, renderFn) {
         var res = await fetch(url, { credentials: 'same-origin' });
         if (!res.ok) {
             var err = await res.json().catch(function() { return {}; });
-            container.innerHTML = renderError(err.error || '请求失败 (' + res.status + ')');
+            container.innerHTML = renderCollapsibleResult('查询结果', renderError(err.error || '请求失败 (' + res.status + ')'));
             return;
         }
         var data = await res.json();
-        container.innerHTML = renderFn(data);
+        container.innerHTML = renderCollapsibleResult('查询结果', renderFn(data));
     } catch (e) {
-        container.innerHTML = renderError('网络错误: ' + e.message);
+        container.innerHTML = renderCollapsibleResult('查询结果', renderError('网络错误: ' + e.message));
     }
 }
 

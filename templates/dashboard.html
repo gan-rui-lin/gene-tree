@@ -113,19 +113,33 @@
             </div>
         </div>
 
-        {# Trend placeholder #}
+        {# Generation distribution #}
         <div class="col-md-6">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">成员数量趋势</h5>
+                    <h5 class="card-title">按辈分人数分布</h5>
+                    {% if stats.generation_distribution %}
                     <div class="trend-placeholder">
-                        <div class="trend-bars">
-                            {% for i in "12345678" %}
-                            <div class="trend-bar" style="height: {% widthratio forloop.counter 8 100 %}%;"></div>
+                        <div class="trend-bars generation-bars">
+                            {% for item in stats.generation_distribution %}
+                            <div class="trend-bar generation-bar"
+                                 style="height: {{ item.bar_height }}%;"
+                                 title="第 {{ item.generation }} 代：{{ item.member_count }} 人（{{ item.ratio }}%）">
+                                <span class="generation-count">{{ item.member_count }}</span>
+                            </div>
                             {% endfor %}
                         </div>
-                        <div class="text-center text-muted small mt-2">按辈分分布（示例占位）</div>
+                        <div class="generation-axis">
+                            {% for item in stats.generation_distribution %}
+                            <span>第{{ item.generation }}代</span>
+                            {% endfor %}
+                        </div>
                     </div>
+                    {% else %}
+                    <div class="empty-state py-3">
+                        <div class="empty-state-desc">暂无可用于统计的辈分数据</div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

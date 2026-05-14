@@ -895,6 +895,7 @@ def _refresh_generation_cache(genealogy_id):
     ]
     with transaction.atomic():
         MemberGenerationCache.objects.filter(genealogy_id=genealogy_id).delete()
+        MemberGenerationCache.objects.filter(member_id__in=gen_map.keys()).delete()
         if rows:
             MemberGenerationCache.objects.bulk_create(rows, batch_size=5000)
 
@@ -979,7 +980,7 @@ def fetch_early_born_members(genealogy_id):
         m.name,
         mgc.generation,
         m.birth_year,
-        gab.avg_birth_year
+        ROUND(gab.avg_birth_year) AS avg_birth_year
     FROM member_generation_cache mgc
     JOIN member m ON m.member_id = mgc.member_id
     JOIN generation_avg_birth gab ON gab.generation = mgc.generation
@@ -991,7 +992,39 @@ def fetch_early_born_members(genealogy_id):
     with connection.cursor() as cursor:
         cursor.execute(sql, [genealogy_id, genealogy_id])
         columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    for item in items:
+        if item.get("avg_birth_year") is not None:
+            item["avg_birth_year"] = int(item["avg_birth_year"])
+    return items
+
+
+def fetch_generation_distribution(genealogy_id):
+    _ensure_generation_cache(genealogy_id)
+    sql = """
+    SELECT
+        mgc.generation,
+        COUNT(*) AS member_count
+    FROM member_generation_cache mgc
+    WHERE mgc.genealogy_id = %s
+    GROUP BY mgc.generation
+    ORDER BY mgc.generation;
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [genealogy_id])
+        rows = cursor.fetchall()
+
+    total = sum(row[1] for row in rows)
+    max_count = max((row[1] for row in rows), default=0)
+    return [
+        {
+            "generation": generation,
+            "member_count": member_count,
+            "ratio": round((member_count / total) * 100, 2) if total else 0.0,
+            "bar_height": round((member_count / max_count) * 100, 2) if max_count else 0.0,
+        }
+        for generation, member_count in rows
+    ]
 
 
 def shortest_relationship_path_sql_bfs(member_id_1, member_id_2):

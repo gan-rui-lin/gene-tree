@@ -17,6 +17,7 @@ from .services import (
     fetch_ancestors,
     fetch_descendants,
     fetch_early_born_members,
+    fetch_generation_distribution,
     fetch_longest_lifespan_generation,
     fetch_spouse_and_children,
     fetch_unmarried_male_over_50,
@@ -93,12 +94,14 @@ def _build_dashboard_stats(genealogy_id):
     female = Member.objects.filter(genealogy_id=genealogy_id, gender="F").count()
     male_ratio = round((male / total) * 100, 2) if total else 0.0
     female_ratio = round((female / total) * 100, 2) if total else 0.0
+    generation_distribution = fetch_generation_distribution(genealogy_id)
     return {
         "total_members": total,
         "male_members": male,
         "female_members": female,
         "male_ratio": male_ratio,
         "female_ratio": female_ratio,
+        "generation_distribution": generation_distribution,
     }
 
 
