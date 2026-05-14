@@ -102,7 +102,21 @@
 
 前端技术：Bootstrap 5.3.3 + 自定义 CSS（1012 行，支持亮/暗主题）+ 自定义 JS（115 行，Toast 通知、主题切换）。后代树采用懒加载（点击展开时异步请求 `/tree-children/{id}`），祖先树在服务端构建完整树结构后前端直接渲染。
 
-> **【图 2 · 待补充】系统功能页面截图拼图**（登录页、成员管理页、后代树页、祖先树页、仪表盘页、分析查询页，共 6 张，拼成 2×3 网格）
+<table>
+<tr>
+<td align="center"><img src="数据看板.png" width="400"/><br/><b>图 2‑1 数据看板</b></td>
+<td align="center"><img src="成员管理.png" width="400"/><br/><b>图 2‑2 成员管理</b></td>
+</tr>
+<tr>
+<td align="center"><img src="祖先树.png" width="400"/><br/><b>图 2‑3 祖先树</b></td>
+<td align="center"><img src="树形展示.png" width="400"/><br/><b>图 2‑4 树形展示</b></td>
+</tr>
+<tr>
+<td align="center"><img src="分析查询.png" width="400"/><br/><b>图 2‑5 分析查询</b></td>
+<td align="center"><img src="主题切换.png" width="400"/><br/><b>图 2‑6 主题切换</b></td>
+</tr>
+</table>
+<p align="center"><b>图 2：系统功能页面</b></p>
 
 ---
 
