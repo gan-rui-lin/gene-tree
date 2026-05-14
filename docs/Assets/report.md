@@ -229,7 +229,51 @@ User ── Genealogy_User ── Genealogy
 ## 2.4 ER 图
 
 ![图 3 E-R 图](E-R图.png)
-<p align="center"><em>图 3：系统 E-R 图，展示 User、Genealogy、Member、ParentChild、Marriage、GenealogyUser 等实体及其联系</em></p>
+<p align="center"><em>图 3：系统 E-R 图，展示 User、Genealogy、Member、ParentChild、Marriage、GenealogyUser、MemberGenerationCache 等实体及其主外键联系</em></p>
+
+图中实体与联系可以概括为：
+
+| 联系 | 基数 | 实现方式 | 说明 |
+|------|------|---------|------|
+| User - Genealogy | 1:N | `genealogy.created_by_id` 外键 | 一个用户可以创建多个族谱 |
+| Genealogy - Member | 1:N | `member.genealogy_id` 外键 | 一个族谱包含多个成员 |
+| User - Genealogy | M:N | `genealogy_user` 中间表 | 支持 owner/editor/viewer 协作权限 |
+| Member - ParentChild - Member | 递归 1:N | `parent_child(parent_id, child_id)` | 父母与子女关系，支持祖先/后代递归查询 |
+| Member - Marriage - Member | M:N | `marriage(spouse1_id, spouse2_id)` | 支持多段婚姻，并保存婚姻时间和状态 |
+| Member - MemberGenerationCache | 1:0..1 | `member_generation_cache.member_id` 主外键 | 每个成员最多一条代际缓存 |
+
+E-R 到关系模式的转换结果如下：
+
+```text
+User(user_id, username, password, email, is_staff, is_active, ...)
+
+Genealogy(genealogy_id, title, surname, created_at, created_by_id)
+  FK created_by_id -> User(user_id)
+
+Member(member_id, genealogy_id, name, gender, birth_year, death_year, biography)
+  FK genealogy_id -> Genealogy(genealogy_id)
+
+ParentChild(parent_id, child_id, relation_type)
+  PK(parent_id, child_id)
+  FK parent_id -> Member(member_id)
+  FK child_id -> Member(member_id)
+
+Marriage(marriage_id, spouse1_id, spouse2_id, start_date, end_date, status)
+  FK spouse1_id -> Member(member_id)
+  FK spouse2_id -> Member(member_id)
+
+GenealogyUser(genealogy_user_id, user_id, genealogy_id, role)
+  FK user_id -> User(user_id)
+  FK genealogy_id -> Genealogy(genealogy_id)
+  UNIQUE(user_id, genealogy_id)
+
+MemberGenerationCache(member_id, genealogy_id, generation, computed_at)
+  PK(member_id)
+  FK member_id -> Member(member_id)
+  FK genealogy_id -> Genealogy(genealogy_id)
+```
+
+其中 `ParentChild` 是自引用递归联系的实体化表，两个外键都指向 `member`；`Marriage` 和 `GenealogyUser` 是带属性的多对多联系实体化表；`MemberGenerationCache` 是物理优化表，逻辑上可由 `parent_child` 推导，删除后可以重新计算。
 
 ## 2.5 规范化推导
 
@@ -296,6 +340,56 @@ Member(member_id, name, gender, birth_year, father_name, mother_name, spouse_nam
 | parent_child | CHECK | parent_id <> child_id |
 | marriage | CHECK | spouse1_id <> spouse2_id |
 | genealogy_user | UNIQUE | (user_id, genealogy_id) |
+
+### 跨行/跨表业务约束（为什么不直接用 CHECK）
+
+除上述“单行可判定”的约束外，族谱场景还存在一些**跨行/跨表**的业务规则，例如：
+
+- **父母出生年份早于子女**：`member.birth_year(parent) < member.birth_year(child)`（两者可能为 NULL）
+- **多租户隔离**：parent 与 child 必须属于同一族谱（`member.genealogy_id(parent) = member.genealogy_id(child)`）
+- **父/母唯一性**：同一个 child 最多一个 father、一个 mother（可等价为 `UNIQUE(child_id, relation_type)`）
+- （可选）**性别与 relation_type 一致**：father 对应 `gender='M'`、mother 对应 `gender='F'`
+
+这些规则的共同点是：需要读取同表的另一行或另一张表的数据（例如在插入 `parent_child` 时要查 `member` 表中的 birth_year/genealogy_id/gender）。
+
+在 SQL 标准语义中，`CHECK` 约束只对“当前行”表达式做判定；在 MySQL 8 中也不支持在 `CHECK` 中引用其他表/子查询来完成上述跨表校验。因此它们通常不适合以 `CHECK` 直接落地。
+
+工程上通常有两种落地方式（可按课程答辩需要说明取舍）：
+
+1) **应用层校验（推荐作为主方案）**：在 Django 的 View/Service 层进行校验后再写入（尤其当关系编辑入口主要在应用侧时）。本项目中 `parent_child` / `marriage` 关系主要由数据生成脚本与批量导入产生，生成规则已在导入前保证数据一致性；若将来开放“在线编辑父母/婚姻关系”，即可在写入前增加这些校验。
+
+2) **数据库触发器/唯一约束（Defense in depth）**：在 MySQL 侧加 `UNIQUE(child_id, relation_type)` 等结构性约束；对“出生年份先后/同族谱/性别匹配”等跨表规则，可用 `BEFORE INSERT/UPDATE` 触发器查询 `member` 并用 `SIGNAL` 拒绝不合法写入。触发器的代价是：实现复杂、调试成本更高，并会对批量导入吞吐产生一定影响（但能保证任何写入路径都遵守规则）。
+
+例如“父母出生年份早于子女”无法仅靠普通 `CHECK` 跨表判断，可用触发器表达：
+
+```sql
+DELIMITER //
+
+CREATE TRIGGER trg_parent_birth_before_child
+BEFORE INSERT ON parent_child
+FOR EACH ROW
+BEGIN
+    DECLARE parent_birth INT;
+    DECLARE child_birth INT;
+
+    SELECT birth_year INTO parent_birth
+    FROM member
+    WHERE member_id = NEW.parent_id;
+
+    SELECT birth_year INTO child_birth
+    FROM member
+    WHERE member_id = NEW.child_id;
+
+    IF parent_birth IS NOT NULL
+       AND child_birth IS NOT NULL
+       AND parent_birth >= child_birth THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'parent birth_year must be earlier than child birth_year';
+    END IF;
+END//
+
+DELIMITER ;
+```
 
 ### 外键策略
 
@@ -627,3 +721,14 @@ Django 自动将这个类翻译为对应的 `CREATE TABLE` SQL 语句，包括�
 | **CTE + 缓存表** | **O(1)** | **O(N)** | **中** | **查询频繁、数据量大** |
 
 选择理由：课程项目中数据量可控，优先设计简洁性；通过缓存表弥补 CTE 的性能不足，同时保持存储结构的简洁。
+
+## 6.4 答辩追问要点
+
+| 可能问题 | 回答要点 |
+|---------|---------|
+| 为什么不在 `member` 表直接存 `father_id`、`mother_id`、`spouse_id`？ | 父母和婚姻是关系结构，不是成员自身的简单属性。拆成 `parent_child` 和 `marriage` 后，可以统一递归查询、支持多子女和多段婚姻，也避免字段重复。 |
+| 递归 CTE 会不会无限循环？ | 正常族谱数据应是无环的；数据库已约束 `parent_id <> child_id` 防止直接自环。若要进一步增强，可在插入亲子关系前检查是否形成祖先环，或在 CTE 中维护路径字段并限制递归深度。 |
+| 为什么没有使用闭包表？ | 闭包表祖先查询快，但需要保存所有祖先-后代路径，存储和维护成本高。本项目采用 `parent_child` 保存最小事实关系，用 Recursive CTE 查询，再用代际缓存优化高频统计。 |
+| `member_generation_cache` 是否违反范式？ | 它是物理层派生缓存，不是核心事实数据。核心表满足 BCNF；缓存表可以删除并由 `parent_child` 重新计算，目的是降低 Q3/Q5 的重复递归成本。 |
+| 为什么 Q4 用 `LEFT JOIN ... IS NULL`？ | 先用 CTE 汇总所有已婚成员，再用反连接筛出不在已婚集合中的男性成员，逻辑清晰，也避免 `OR` 条件导致 MySQL 难以使用索引。 |
+| 出生年份为空如何处理？ | 年龄、寿命和平均出生年份查询都显式加 `birth_year IS NOT NULL`，避免空值参与计算导致统计语义不清。 |
