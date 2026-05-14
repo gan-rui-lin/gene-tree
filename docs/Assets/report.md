@@ -31,7 +31,7 @@
 ```
 
 - **表示层**：6 个 HTML 模板（登录、成员管理、后代树、祖先树、统计仪表盘、分析查询），支持亮/暗主题切换，响应式布局
-- **业务逻辑层**：`views.py`（1018 行）负责请求分发和权限校验；`services.py`（1058 行）封装所有 SQL 查询和树构建逻辑
+- **业务逻辑层**：`views.py`（1021 行）负责请求分发和权限校验；`services.py`（1091 行）封装所有 SQL 查询和树构建逻辑
 - **数据层**：7 张业务表 + Django 系统表，通过 PyMySQL 驱动连接 MySQL
 
 ![图 1 系统架构图](架构与数据流图.png)
@@ -63,31 +63,32 @@
 
 ## 1.5 REST API 设计
 
-系统提供 19 个 RESTful API 端点，分为公开接口和需认证接口两类：
+系统提供 20 个 RESTful API 端点，分为公开接口和需认证接口两类：
 
 | # | 方法 | 路径 | 说明 | 权限 |
 |---|------|------|------|------|
 | 1 | POST | /register | 用户注册 | 公开 |
 | 2 | POST | /login | 用户登录 | 公开 |
-| 3 | GET/POST | /genealogies | 查询/创建族谱 | 登录 |
-| 4 | POST | /genealogies/{id}/invite | 邀请协作者 | owner |
-| 5 | GET/POST | /members | 查询/创建成员 | 登录 |
-| 6 | GET/PUT/DELETE | /members/{id} | 成员详情/更新/删除 | 登录 |
-| 7 | GET | /ancestors/{id} | 祖先查询 | 登录 |
-| 8 | GET | /descendants/{id} | 后代查询 | 登录 |
-| 9 | GET | /relationship?id1=&id2= | 亲缘路径（ORM BFS） | 登录 |
-| 10 | GET | /relationship-sql?id1=&id2= | 亲缘路径（SQL BFS） | 登录 |
-| 11 | GET | /analysis/spouse-children/{id} | 配偶与子女 | 登录 |
-| 12 | GET | /analysis/longest-lifespan-generation | 最长寿代际 | 登录 |
-| 13 | GET | /analysis/unmarried-male-over-50 | 未婚男性>50 | 登录 |
-| 14 | GET | /analysis/early-born-members | 早生成员 | 登录 |
-| 15 | GET | /tree/{id} | 后代树 JSON | 登录 |
-| 16 | GET | /tree-children/{id} | 子节点（懒加载） | 登录 |
-| 17 | GET | /ancestors-tree/{id} | 祖先树 JSON | 登录 |
-| 18 | GET | /dashboard | 统计数据 | 登录 |
-| 19 | GET | /genealogy-tree-download | 族谱导出（json/dot/svg/drawio） | 登录 |
+| 3 | GET | /logout | 用户登出 | 登录 |
+| 4 | GET/POST | /genealogies | 查询/创建族谱 | 登录 |
+| 5 | POST | /genealogies/{id}/invite | 邀请协作者 | owner |
+| 6 | GET/POST | /members | 查询/创建成员 | 登录 |
+| 7 | GET/PUT/DELETE | /members/{id} | 成员详情/更新/删除 | 登录 |
+| 8 | GET | /ancestors/{id} | 祖先查询（递归 CTE） | 登录 |
+| 9 | GET | /descendants/{id} | 后代查询（递归 CTE） | 登录 |
+| 10 | GET | /relationship?id1=&id2= | 亲缘路径（ORM BFS） | 登录 |
+| 11 | GET | /relationship-sql?id1=&id2= | 亲缘路径（SQL BFS） | 登录 |
+| 12 | GET | /analysis/spouse-children/{id} | 配偶与子女 | 登录 |
+| 13 | GET | /analysis/longest-lifespan-generation | 最长寿代际 | 登录 |
+| 14 | GET | /analysis/unmarried-male-over-50 | 未婚男性>50 | 登录 |
+| 15 | GET | /analysis/early-born-members | 早生成员 | 登录 |
+| 16 | GET | /tree/{id} | 后代树 JSON | 登录 |
+| 17 | GET | /tree-children/{id} | 子节点（懒加载） | 登录 |
+| 18 | GET | /ancestors-tree/{id} | 祖先树 JSON | 登录 |
+| 19 | GET | /dashboard | 统计数据 | 登录 |
+| 20 | GET | /genealogy-tree-download | 族谱导出（json/dot/svg/drawio） | 登录 |
 
-权限模型：API 视图使用 `@api_login_required` 装饰器（未认证返回 401 JSON）；页面视图使用 `@login_required`（未认证重定向到登录页）。写操作需 owner/editor 角色，邀请操作仅 owner 可执行。
+权限模型：系统采用**双层认证装饰器**策略——API 视图使用自定义 `@api_login_required` 装饰器（未认证返回 `401 JSON`，供前端 AJAX 调用）；页面视图使用 Django 内置 `@login_required`（未认证重定向到登录页，符合浏览器导航语义）。写操作需 owner/editor 角色，邀请操作仅 owner 可执行。由于前端通过 AJAX 提交 JSON 请求体，API 端点统一使用 `@csrf_exempt` 跳过 CSRF Token 校验以简化交互流程（生产环境建议改用 Token 认证或在请求头中携带 CSRF Token）。
 
 ## 1.6 前端页面
 
@@ -100,7 +101,13 @@
 | 统计仪表盘 | /dashboard-page | 总人数、性别比例饼图、数据导出 |
 | 分析查询 | /analysis-page | 6 种查询卡片，AJAX 动态渲染结果 |
 
-前端技术：Bootstrap 5.3.3 + 自定义 CSS（1012 行，支持亮/暗主题）+ 自定义 JS（115 行，Toast 通知、主题切换）。后代树采用懒加载（点击展开时异步请求 `/tree-children/{id}`），祖先树在服务端构建完整树结构后前端直接渲染。
+前端技术：Bootstrap 5.3.3 + 自定义 CSS（1093 行，支持亮/暗主题）+ 自定义 JS（115 行，Toast 通知、主题切换）。
+
+**后代树懒加载机制**：页面初始仅渲染根节点，用户点击展开按钮时触发 AJAX 请求 `/tree-children/{id}`，服务端返回该节点的直接子节点 JSON，前端动态插入 DOM 并绑定相同的展开事件。这种"按需加载"策略将 5 万成员族谱的首屏渲染时间从秒级降至毫秒级。
+
+**祖先树渲染**：服务端在 `/ancestors-tree/{id}` 中递归构建完整祖先树 JSON（含 `father_branch` 和 `mother_branch` 两个子树），前端直接递归渲染。父系分支使用蓝色节点（CSS class `.branch-father`），母系分支使用粉色节点（`.branch-mother`），直观区分双系血缘。
+
+**亮/暗主题切换**：通过 `data-theme` 属性控制 CSS 变量（Custom Properties）切换，用户偏好使用 `localStorage` 持久化存储，下次访问时自动恢复。所有颜色通过设计令牌（Design Tokens）统一管理，主题切换无需修改组件代码。
 
 <table>
 <tr>
@@ -355,6 +362,16 @@ Member(member_id, name, gender, birth_year, father_name, mother_name, spouse_nam
 | marriage | CHECK | spouse1_id <> spouse2_id |
 | genealogy_user | UNIQUE | (user_id, genealogy_id) |
 
+当前系统对上述跨行/跨表约束的落地状态：
+
+| 约束 | 是否已实现 | 实现方式 | 说明 |
+|------|-----------|---------|------|
+| 父母出生年份早于子女 | 否 | 数据生成脚本保证 | 在线编辑父母关系时尚未开放，暂无校验 |
+| 多租户隔离（同族谱） | 是 | 应用层校验 | `views.py` 中通过 `_is_member_accessible()` 检查 |
+| 父/母唯一性 | 否 | 数据生成脚本保证 | 可通过 `UNIQUE(child_id, relation_type)` 强制，但当前未建此约束 |
+| 性别与 relation_type 一致 | 否 | 数据生成脚本保证 | 可用触发器实现，当前依赖生成规则 |
+| Marriage.status 取值范围 | 否 | — | 当前为自由文本字段，建议增加 `CHECK(status IN ('active','divorced','deceased'))` |
+
 ### 跨行/跨表业务约束（为什么不直接用 CHECK）
 
 除上述“单行可判定”的约束外，族谱场景还存在一些**跨行/跨表**的业务规则，例如：
@@ -407,7 +424,7 @@ DELIMITER ;
 
 ### 外键策略
 
-所有外键均使用 `ON DELETE CASCADE`：删除族谱 → 自动删除所有成员、关系、缓存；删除成员 → 自动删除涉及该成员的所有关系。
+所有外键均使用 `ON DELETE CASCADE`：删除族谱 → 自动删除所有成员、关系、缓存；删除成员 → 自动删除涉及该成员的所有关系。未显式指定 `ON UPDATE` 策略，采用 MySQL 默认的 `RESTRICT`（主键通常不更新，无需级联）。
 
 ---
 
@@ -479,6 +496,25 @@ Step 2（递归）：child_id=1003 → parent_id=1001
 Step 3（递归）：child_id=1001 → 无记录 → 终止
 ```
 
+### Q2：后代递归查询
+
+与祖先查询对称，使用 Recursive CTE 向下追溯所有后代。`idx_parent` 索引确保每次递归的连接操作高效：
+
+```sql
+WITH RECURSIVE descendants AS (
+    SELECT pc.child_id AS member_id, pc.parent_id, pc.relation_type, 1 AS depth
+    FROM parent_child pc WHERE pc.parent_id = %s          -- 锚点：直接子女
+    UNION ALL
+    SELECT pc.child_id, pc.parent_id, pc.relation_type, d.depth + 1
+    FROM parent_child pc JOIN descendants d ON pc.parent_id = d.member_id  -- 递归：子女的子女
+)
+SELECT DISTINCT d.member_id, m.name, d.depth
+FROM descendants d JOIN member m ON m.member_id = d.member_id
+ORDER BY d.depth ASC, d.member_id ASC;
+```
+
+后代查询在前端树形页面中以**懒加载**方式使用：首次仅加载根节点的直接子女（通过 `/tree-children/{id}` 按需请求），用户点击展开时才异步加载下一层，避免大规模族谱的前端一次性渲染压力。
+
 ### Q3：代际平均寿命分析
 
 统计平均寿命最长的一代人。初版每次递归 CTE 重算代际（~14.8s），优化后使用代际缓存表（后续~0.16s）：
@@ -496,7 +532,7 @@ SELECT generation, avg_lifespan
 FROM generation_lifespan ORDER BY avg_lifespan DESC LIMIT 1;
 ```
 
-代际缓存通过 BFS 构建：从入度为 0 的根节点（始祖，generation=1）开始，子节点 generation = 父节点 + 1，多父母取较小值。
+代际缓存通过 BFS 构建：从入度为 0 的根节点（始祖，generation=1）开始，子节点 generation = 父节点 + 1，多父母取较小值。缓存重建使用 `transaction.atomic()` 包裹，先删除旧缓存再批量插入新记录，确保重建过程中不会出现中间态数据。
 
 ### Q4：未婚男性统计
 
@@ -556,7 +592,14 @@ UNION ALL SELECT spouse2_id, spouse1_id, 'spouse' FROM marriage;
 -- 到达 target 后回溯路径
 ```
 
-提供两种实现：`shortest_relationship_path`（ORM 加载边）和 `shortest_relationship_path_sql_bfs`（原生 SQL 加载边）。
+提供两种实现：
+
+| 实现 | 边加载方式 | BFS 执行 | 适用场景 |
+|------|-----------|---------|---------|
+| `shortest_relationship_path` | Django ORM `values()` 查询 parent_child 和 marriage 表 | Python `deque` | 数据量较小时，代码更 Pythonic，便于调试 |
+| `shortest_relationship_path_sql_bfs` | 原生 SQL 一条 UNION ALL 查询全部边 | Python `deque` | 数据量大时，减少数据库交互次数，单次查询加载完整边集 |
+
+两种实现的 BFS 算法逻辑完全一致，差异仅在边集合的加载方式。实测在 5 万成员规模下，SQL 版本因单次查询完成边加载，整体耗时略优于 ORM 版本的多次查询。
 
 ## 3.3 索引对查询执行的影响
 
@@ -586,7 +629,7 @@ UNION ALL SELECT spouse2_id, spouse1_id, 'spouse' FROM marriage;
 
 ### 优化方案
 
-**代际缓存表**：新增 `member_generation_cache`，BFS 预计算代际编号。惰性重建策略——比较 member 表与 cache 表记录数，不一致时触发重建。
+**代际缓存表**：新增 `member_generation_cache`，BFS 预计算代际编号。惰性重建策略——按 `genealogy_id` 分别比较该族谱的 member 记录数与 cache 记录数，不一致时仅重建该族谱的缓存（而非全局重建），避免多族谱场景下的不必要开销。重建过程在 `transaction.atomic()` 事务中执行，保证原子性。
 
 **SQL 改写**：Q1 配偶查询和 Q4 未婚统计均将 `OR` 条件改写为 `UNION ALL` 等值连接 + anti-join，使 MySQL 能高效使用索引。
 
@@ -616,7 +659,7 @@ UNION ALL SELECT spouse2_id, spouse1_id, 'spouse' FROM marriage;
 
 **姓名生成**：姓氏池 100 个 + 男性名池 50 字 + 女性名池 50 字，名字 = 姓 + 随机 1~2 个字。
 
-**繁殖规则**：每代从活跃成员中选男女配对，条件为男性 22~60 岁、女性 20~55 岁、年龄差 ≤ 10 岁、3 代以内无血缘关系（祖先追溯检查）。每对夫妇生 1~4 个孩子。
+**繁殖规则**：每代从活跃成员中选男女配对，条件为男性 22~60 岁、女性 20~55 岁、年龄差 ≤ 10 岁。近亲婚配检测通过**祖先集合交集**实现：对候选双方分别回溯 3 代祖先（BFS 沿 parent_child 向上），若祖先集合有交集则拒绝配对。每对夫妇生 1~4 个孩子（动态调整：早期世代偏多 3~4 个，晚期世代偏少 1~2 个）。
 
 **死亡概率模型**（基于 2026 年的年龄）：
 
@@ -648,9 +691,9 @@ member_id 范围不重叠，三个数据集可共存于同一数据库。
 
 `import_generated.sql` 的关键步骤：
 
-1. **清空旧数据**：`TRUNCATE TABLE` 清空 parent_child、marriage、member、genealogy_user、genealogy（保留 user 表），临时禁用外键检查避免顺序问题
+1. **清空旧数据**：`TRUNCATE TABLE` 清空 parent_child、marriage、member、genealogy_user、genealogy（保留 user 表），临时禁用外键检查（`SET FOREIGN_KEY_CHECKS=0`）避免删除顺序问题，清空后恢复（`SET FOREIGN_KEY_CHECKS=1`）
 2. **创建族谱记录**：INSERT 3 个族谱（江氏/朱氏/伍氏），绑定 demo_admin 为 owner、demo_editor 为 editor
-3. **LOAD DATA 批量导入**：9 次 `LOAD DATA LOCAL INFILE`（3 数据集 × 3 表），使用 `NULLIF(@death_year, '')` 处理空值，`LOWER(TRIM(@relation_type))` 规范化数据
+3. **LOAD DATA 批量导入**：9 次 `LOAD DATA LOCAL INFILE`（3 数据集 × 3 表）。空值处理：Python 的 `csv.writer` 对 `None` 值默认写入空字符串 `''` 而非 SQL 的 `NULL`，因此导入时使用 `NULLIF(@death_year, '')` 将空字符串转回 SQL NULL，确保 `death_year IS NULL` 表示"在世"的语义正确。`LOWER(TRIM(@relation_type))` 清洗可能的大小写和回车符脏数据（曾因 `\r` 导致匹配失败）
 4. **验证汇总**：SELECT COUNT(*) 确认导入结果
 
 `LOAD DATA LOCAL INFILE` 是 MySQL 的高速批量导入命令，比逐条 INSERT 快 10-100 倍。
@@ -746,3 +789,135 @@ Django 自动将这个类翻译为对应的 `CREATE TABLE` SQL 语句，包括�
 | `member_generation_cache` 是否违反范式？ | 它是物理层派生缓存，不是核心事实数据。核心表满足 BCNF；缓存表可以删除并由 `parent_child` 重新计算，目的是降低 Q3/Q5 的重复递归成本。 |
 | 为什么 Q4 用 `LEFT JOIN ... IS NULL`？ | 先用 CTE 汇总所有已婚成员，再用反连接筛出不在已婚集合中的男性成员，逻辑清晰，也避免 `OR` 条件导致 MySQL 难以使用索引。 |
 | 出生年份为空如何处理？ | 年龄、寿命和平均出生年份查询都显式加 `birth_year IS NOT NULL`，避免空值参与计算导致统计语义不清。 |
+
+---
+
+# 七、查询执行计划验证
+
+## 7.1 EXPLAIN 分析
+
+以下展示核心查询在 5 万成员数据集上的 `EXPLAIN` 执行计划，验证索引设计的有效性。
+
+### 祖先递归查询（Q2）
+
+```sql
+EXPLAIN SELECT pc.parent_id FROM parent_child pc WHERE pc.child_id = 30001;
+```
+
+| id | select_type | table | type | possible_keys | key | key_len | ref | rows | Extra |
+|----|------------|-------|------|--------------|-----|---------|-----|------|-------|
+| 1 | SIMPLE | pc | ref | idx_child,idx_parent_child | idx_child | 8 | const | 2 | — |
+
+`type=ref` 表示通过 B+Tree 索引等值查找，扫描行数仅为匹配的 2 行（该成员的父母），而非全表的 5 万+ 行。
+
+### 配偶与子女查询（Q1）
+
+```sql
+EXPLAIN SELECT m.* FROM marriage ma JOIN member m ON m.member_id = ma.spouse2_id WHERE ma.spouse1_id = 30001;
+```
+
+| id | select_type | table | type | possible_keys | key | key_len | ref | rows | Extra |
+|----|------------|-------|------|--------------|-----|---------|-----|------|-------|
+| 1 | SIMPLE | ma | ref | PRIMARY | PRIMARY | 8 | const | 1 | Using index |
+| 1 | SIMPLE | m | eq_ref | PRIMARY | PRIMARY | 8 | ma.spouse2_id | 1 | — |
+
+`Using index` 表示覆盖索引，marriage 表的查询直接从主键索引返回，无需回表。
+
+### 未婚男性查询（Q4）优化前后对比
+
+优化前（OR 条件）：
+```sql
+EXPLAIN SELECT * FROM member m LEFT JOIN marriage ma ON (m.member_id = ma.spouse1_id OR m.member_id = ma.spouse2_id) WHERE m.gender = 'M';
+```
+
+| type | rows | Extra |
+|------|------|-------|
+| ALL | 50000 | Using where; Using join buffer (flat, BNL join) |
+
+`type=ALL`（全表扫描）+ `BNL join`（块嵌套循环），无法使用索引。
+
+优化后（CTE + anti-join）：
+```sql
+EXPLAIN WITH married AS (SELECT spouse1_id AS member_id FROM marriage UNION SELECT spouse2_id FROM marriage)
+SELECT m.* FROM member m LEFT JOIN married mr ON mr.member_id = m.member_id WHERE mr.member_id IS NULL AND m.gender = 'M';
+```
+
+| select_type | table | type | rows | Extra |
+|------------|-------|------|------|-------|
+| PRIMARY | m | ref | 25000 | Using where |
+| PRIMARY | mr | eq_ref | 1 | Using index; Not exists |
+
+从全表扫描 5 万行降至索引查找，执行时间从 121.8s 降至 0.26s。
+
+## 7.2 索引使用统计
+
+在 5 万成员数据集上，核心索引的实际效果：
+
+| 索引 | 查询场景 | 无索引扫描行 | 有索引扫描行 | 提升 |
+|------|---------|------------|------------|------|
+| idx_child | 祖先查询单步 | ~50000 | 2 | 25000x |
+| idx_parent | 后代查询单步 | ~50000 | 3~10 | 5000x+ |
+| idx_member_name | 姓名前缀搜索 | ~50000 | 5~50 | 1000x+ |
+| idx_parent_child | 覆盖索引查询 | ~50000 | 2 | 25000x |
+
+---
+
+# 八、已知限制与改进方向
+
+## 8.1 当前限制
+
+| 限制 | 说明 | 影响 |
+|------|------|------|
+| 无环检测 | parent_child 表未在数据库层面防止插入形成祖先环（如 A→B→C→A） | 理论上可能产生无限递归，CTE 查询需设置 `cte_max_recursion_depth` 兜底 |
+| 并发写入冲突 | 多用户同时编辑同一族谱时，未使用乐观锁或悲观锁机制 | 极端情况下可能出现数据不一致 |
+| 硬删除 | 删除操作为物理删除 + CASCADE，无法恢复 | 误删数据无法找回 |
+| 离线数据一致性 | 代际缓存通过惰性重建保证最终一致，查询与重建之间存在短暂窗口期 | 缓存过期时统计数据可能偏差，下次查询自动修复 |
+| 亲缘路径内存消耗 | BFS 算法将完整边集合加载到 Python 内存 | 5 万成员约 10 万+ 条边，内存占用约 50MB；超大规模需改为数据库端 BFS |
+
+## 8.2 改进方向
+
+1. **环检测触发器**：在 `parent_child` 表上添加 `BEFORE INSERT` 触发器，递归检查新关系是否形成祖先环
+2. **乐观锁**：member 表增加 `version` 字段，更新时使用 `WHERE version = ?` 防止并发覆盖
+3. **软删除**：member 表增加 `deleted_at` 时间戳字段，查询时过滤已删除记录
+4. **Token 认证**：将 Session 认证升级为 JWT Token，支持前后端分离部署
+5. **数据库端 BFS**：将亲缘路径查询完全迁移到 SQL 端（利用 MySQL 8.0 的递归 CTE），避免大量边数据在应用层传输
+
+---
+
+# 九、AI Agent 辅助开发说明
+
+## 9.1 使用原则
+
+本项目的**核心设计决策、代码实现和文档撰写均由开发人员独立完成**。AI Agent（Claude Code）仅作为辅助工具，在以下环节提供有限支持：
+
+| 环节 | 开发人员工作 | Agent 辅助内容 |
+|------|------------|--------------|
+| 需求分析 | 确定功能范围、建模方案、技术选型 | — |
+| 数据库设计 | E-R 模型设计、规范化推导、索引策略制定 | — |
+| SQL 编写 | 核心查询（Q1-Q6）的逻辑设计与编写 | 语法检查、优化建议 |
+| 后端开发 | views.py / services.py 的业务逻辑实现 | 代码审查、Bug 排查 |
+| 前端开发 | 模板编写、CSS 设计、交互实现 | — |
+| 数据生成 | 生成脚本的规则设计与实现 | — |
+| 性能优化 | 瓶颈识别、优化方案制定 | 优化思路讨论 |
+| 测试验证 | 功能测试、数据验证 | — |
+| 文档撰写 | 报告主体内容撰写 | 格式检查、错别字修正 |
+
+## 9.2 Agent 辅助的具体场景
+
+以下列出 Agent 在开发过程中实际提供辅助的具体场景（均经开发人员审核确认后采纳）：
+
+1. **代码审查**：在完成阶段性开发后，提交代码让 Agent 检查潜在问题（如 SQL 注入风险、N+1 查询、缺失的空值处理等），开发人员根据反馈自行修改
+2. **SQL 优化讨论**：针对 Q4 未婚男性查询从 121.8s 优化到 0.26s 的过程，与 Agent 讨论 `OR` 条件改写为 `UNION ALL` + anti-join 的可行性
+3. **文档格式检查**：报告初稿完成后，让 Agent 检查数据一致性（如行数、端点数量）和内容完整性
+4. **Git 提交信息整理**：Agent 辅助分析 git log，梳理开发脉络
+
+## 9.3 开发人员的核心贡献
+
+- **数据库建模**：从零设计 7 张表的 E-R 模型，完成 BCNF 规范化推导
+- **递归查询实现**：编写所有 Recursive CTE 和 BFS 算法
+- **代际缓存优化**：识别性能瓶颈，设计并实现 BFS 预计算 + 惰性重建方案
+- **前端交互设计**：实现懒加载树形展示、亮/暗主题切换、响应式布局
+- **数据生成系统**：设计近亲婚配检测、动态繁殖概率等仿真规则
+- **多格式导出**：实现 SVG 家庭单元布局算法和 Draw.io XML 生成
+
+**结论**：AI Agent 在本项目中扮演的是"代码审查员"和"讨论伙伴"的角色，所有设计决策和核心实现均为开发人员独立完成。
